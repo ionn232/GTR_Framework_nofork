@@ -123,6 +123,8 @@ uniform sampler2D u_texture;
 uniform float u_time;
 uniform float u_alpha_cutoff;
 
+uniform vec3 u_camera_position;
+
 uniform sampler2D u_normalmap;
 uniform int u_use_normalmap;
 
@@ -134,6 +136,8 @@ uniform sampler2D u_occlusion;
 uniform sampler2D u_metal_roughness;
 uniform int u_use_occlusion;
 uniform int u_use_specular;
+uniform float u_metal_factor;
+uniform float u_rough_factor;
 
 uniform vec3 u_ambient_light;
 
@@ -191,10 +195,18 @@ void main()
 		discard;
 
 	vec3 light = vec3(0.0, 0.0, 0.0);
-	light += u_ambient_light;
+	
+	float occlusion = texture( u_metal_roughness, v_uv).r;
+	if (u_use_occlusion == 1) {
+		light += u_ambient_light * occlusion;
+	}
+	else{
+		light += u_ambient_light;
+	}
+
+	vec3 V = normalize(u_camera_position - v_world_position);
 
 	vec3 N = normalize(v_normal);
-
 	vec3 normal_pixel = texture( u_normalmap, v_uv ).xyz;
 	if (u_use_normalmap == 1) {
 		N = perturbNormal(N,v_world_position, v_uv , normal_pixel);
@@ -204,19 +216,17 @@ void main()
 	if (u_use_emissive == 1) {
 		light += emissive_pixel * u_emissive_factor;
 	}
-	if (u_use_occlusion == 1) {
-		float occlusion1 = texture( u_metal_roughness, v_uv).r;
-		float occlusion2 = length(texture( u_occlusion, v_uv).rgba);
-		float trueOcclusion = occlusion1*occlusion2;
-		light *= trueOcclusion;
-	}
+
+	float spec_ks = texture( u_metal_roughness, v_uv).g;
+	float spec_a =  texture( u_metal_roughness, v_uv).b;
 
 	for (int i=0; i<MAX_LIGHTS; i++) {
 		if (i<u_num_lights) {
 			if (u_light_type[i] == 1) { 		//point lights
+				//diffuse value
 				vec3 L = u_light_pos[i] - v_world_position;
 				L= normalize(L);
-				float NdotL = clamp(dot(N, L), 0.0, 1.0); 		//how much is pixel facing light
+				float NdotL = clamp(dot(N, L), 0.0, 1.0);
 				
 				float lightDist = distance(u_light_pos[i], v_world_position);
 				float att_factor = u_max_distance[i] - lightDist;
@@ -224,11 +234,22 @@ void main()
 				att_factor = max(att_factor, 0.0);
 
 				light += (NdotL * u_light_col[i]) * att_factor;
+
+				//specular value (blinn-phong)
+				if (u_use_specular == 1) {
+					vec3 H = normalize(L + V);
+					float NdotH = clamp(dot(N, H), 0.0, 1.0);
+					float final_a = 1-(spec_a * u_rough_factor);
+					float final_ks = spec_ks * u_metal_factor;
+					if (final_a != 0) {light += final_ks * pow(NdotH, final_a) * u_light_col[i] * att_factor; }
+				}
+
 			}
 			else if (u_light_type[i] == 2) { 		//spot lights
+				//diffuse value
 				vec3 L = u_light_pos[i] - v_world_position;
 				L= normalize(L);
-				float NdotL = clamp(dot(N, L), 0.0, 1.0); 		//how much is pixel facing light
+				float NdotL = clamp(dot(N, L), 0.0, 1.0);
 				
 				float lightDist = distance(u_light_pos[i], v_world_position);
 				float att_factor = u_max_distance[i] - lightDist;
@@ -243,13 +264,42 @@ void main()
 					NdotL *= (cos_angle - u_cone_info[i].x) / (u_cone_info[i].y - u_cone_info[i].x);
 				}
 
-
 				light += (NdotL * u_light_col[i]) * att_factor;
+
+				//specular value (blinn-phong)
+				if (u_use_specular == 1) {
+					vec3 H = normalize(L + V);
+					float NdotH = clamp(dot(N, H), 0.0, 1.0);
+					float final_a = 1-(spec_a * u_rough_factor);
+					float final_ks = spec_ks * u_metal_factor;
+
+					float cos_angle = dot(u_light_front[i], L);
+					if (cos_angle < u_cone_info[i].x) {
+						NdotH = 0;
+					}
+					else if (cos_angle < u_cone_info[i].y) {
+						NdotH *= (cos_angle - u_cone_info[i].x) / (u_cone_info[i].y - u_cone_info[i].x);
+					}
+
+					if (final_a != 0) {light += final_ks * pow(NdotH, final_a) * u_light_col[i] * att_factor; }
+				}
 			}
 			else if (u_light_type[i] == 3) {		//directional lights
+				//diffuse value
 				vec3 L = u_light_front[i];
+				L = normalize(L);
 				float NdotL = clamp(dot(N, L), 0.0, 1.0);
+
 				light += NdotL * u_light_col[i];
+
+				//specular value (blinn-phong)
+				if (u_use_specular == 1) {
+					vec3 H = normalize(L + V);
+					float NdotH = clamp(dot(N, H), 0.0, 1.0);
+					float final_a = 1-(spec_a * u_rough_factor);
+					float final_ks = spec_ks * u_metal_factor;
+					if (final_a != 0) {light += final_ks * pow(NdotH, final_a) * u_light_col[i]; }
+				}
 			}
 		}
 	}
@@ -273,6 +323,22 @@ uniform sampler2D u_texture;
 uniform float u_time;
 uniform float u_alpha_cutoff;
 
+uniform vec3 u_camera_position;
+
+uniform sampler2D u_normalmap;
+uniform int u_use_normalmap;
+
+uniform sampler2D u_emissive;
+uniform vec3 u_emissive_factor;
+uniform int u_use_emissive;
+
+uniform sampler2D u_occlusion;
+uniform sampler2D u_metal_roughness;
+uniform int u_use_occlusion;
+uniform int u_use_specular;
+uniform float u_metal_factor;
+uniform float u_rough_factor;
+
 uniform vec3 u_ambient_light;
 
 uniform vec3 u_light_pos;
@@ -285,11 +351,39 @@ uniform int u_light_type;
 		//POINT = 1,
 		//SPOT = 2,
 		//DIRECTIONAL = 3
-		//AMBIENT = 4
 
 uniform int u_num_lights;
 
 out vec4 FragColor;
+
+mat3 cotangent_frame(vec3 N, vec3 p, vec2 uv)
+{
+	// get edge vectors of the pixel triangle
+	vec3 dp1 = dFdx( p );
+	vec3 dp2 = dFdy( p );
+	vec2 duv1 = dFdx( uv );
+	vec2 duv2 = dFdy( uv );
+	
+	// solve the linear system
+	vec3 dp2perp = cross( dp2, N );
+	vec3 dp1perp = cross( N, dp1 );
+	vec3 T = dp2perp * duv1.x + dp1perp * duv2.x;
+	vec3 B = dp2perp * duv1.y + dp1perp * duv2.y;
+ 
+	// construct a scale-invariant frame 
+	float invmax = inversesqrt( max( dot(T,T), dot(B,B) ) );
+	return mat3( T * invmax, B * invmax, N );
+}
+
+// assume N, the interpolated vertex normal and 
+// WP the world position
+//vec3 normal_pixel = texture2D( normalmap, uv ).xyz; 
+vec3 perturbNormal(vec3 N, vec3 WP, vec2 uv, vec3 normal_pixel)
+{
+	normal_pixel = normal_pixel * 255./127. - 128./127.;
+	mat3 TBN = cotangent_frame(N, WP, uv);
+	return normalize(TBN * normal_pixel);
+}
 
 void main()
 {
@@ -302,49 +396,107 @@ void main()
 
 	vec3 light = vec3(0.0, 0.0, 0.0);
 
+	vec3 V = normalize(u_camera_position - v_world_position);
+	vec3 N = normalize(v_normal);
+	vec3 normal_pixel = texture( u_normalmap, v_uv ).xyz;
+	if (u_use_normalmap == 1) {
+		N = perturbNormal(N,v_world_position, v_uv , normal_pixel);
+	}
+	float spec_ks = texture( u_metal_roughness, v_uv).g;
+	float spec_a =  texture( u_metal_roughness, v_uv).b;
+
 	if (u_light_type == 1) { 		//point lights
+		//diffuse value
 		vec3 L = u_light_pos - v_world_position;
 		L= normalize(L);
-		vec3 N = normalize(v_normal);
-		float NdotL = clamp(dot(N, L), 0.0, 1.0); 		//how much is pixel facing light
+		float NdotL = clamp(dot(N, L), 0.0, 1.0);
+		
 		float lightDist = distance(u_light_pos, v_world_position);
-
 		float att_factor = u_max_distance - lightDist;
 		att_factor = att_factor/u_max_distance;
 		att_factor = max(att_factor, 0.0);
 
 		light += (NdotL * u_light_col) * att_factor;
+
+		//specular value (blinn-phong)
+		if (u_use_specular == 1) {
+			vec3 H = normalize(L + V);
+			float NdotH = clamp(dot(N, H), 0.0, 1.0);
+			float final_a = 1-(spec_a * u_rough_factor);
+			float final_ks = spec_ks * u_metal_factor;
+			if (final_a != 0) {light += final_ks * pow(NdotH, final_a) * u_light_col * att_factor; }
+		}
 	}
 	else if (u_light_type == 2) { 		//spot lights
+		//diffuse value
 		vec3 L = u_light_pos - v_world_position;
 		L= normalize(L);
-		float cos_angle = dot(u_light_front, L);
-		vec3 N = normalize(v_normal);
-		float NdotL = clamp(dot(N, L), 0.0, 1.0); 		//how much is pixel facing light
+		float NdotL = clamp(dot(N, L), 0.0, 1.0);
+		
+		float lightDist = distance(u_light_pos, v_world_position);
+		float att_factor = u_max_distance - lightDist;
+		att_factor = att_factor/u_max_distance;
+		att_factor = max(att_factor, 0.0);
 
+		float cos_angle = dot(u_light_front, L);
 		if (cos_angle < u_cone_info.x) {
 			NdotL = 0.0;
 		}
 		else if (cos_angle < u_cone_info.y) {
-			NdotL *= (cos_angle - u_cone_info.x)/(u_cone_info.y - u_cone_info.x);
+			NdotL *= (cos_angle - u_cone_info.x) / (u_cone_info.y - u_cone_info.x);
 		}
-		float lightDist = distance(u_light_pos, v_world_position);
-		float att_factor = u_max_distance - lightDist;
-		att_factor = att_factor/u_max_distance;
-		att_factor = max(att_factor, 0.0);
 
 		light += (NdotL * u_light_col) * att_factor;
+
+		//specular value (blinn-phong)
+		if (u_use_specular == 1) {
+			vec3 H = normalize(L + V);
+			float NdotH = clamp(dot(N, H), 0.0, 1.0);
+			float final_a = 1-(spec_a * u_rough_factor);
+			float final_ks = spec_ks * u_metal_factor;
+
+			float cos_angle = dot(u_light_front, L);
+			if (cos_angle < u_cone_info.x) {
+				NdotH = 0;
+			}
+			else if (cos_angle < u_cone_info.y) {
+				NdotH *= (cos_angle - u_cone_info.x) / (u_cone_info.y - u_cone_info.x);
+			}
+
+			if (final_a != 0) {light += final_ks * pow(NdotH, final_a) * u_light_col * att_factor; }
+		}
 	}
 	else if (u_light_type == 3) {		//directional lights
+		//diffuse value
 		vec3 L = u_light_front;
-		vec3 N = normalize(v_normal);
+		L = normalize(L);
 		float NdotL = clamp(dot(N, L), 0.0, 1.0);
+
 		light += NdotL * u_light_col;
+
+		//specular value (blinn-phong)
+		if (u_use_specular == 1) {
+			vec3 H = normalize(L + V);
+			float NdotH = clamp(dot(N, H), 0.0, 1.0);
+			float final_a = 1-(spec_a * u_rough_factor);
+			float final_ks = spec_ks * u_metal_factor;
+			if (final_a != 0) {light += final_ks * pow(NdotH, final_a) * u_light_col; }
+		}
 	}
 	else if (u_light_type == 4) {		//ambient light (first pass)
-		light += u_ambient_light;
+		float occlusion = texture( u_metal_roughness, v_uv).r;
+		if (u_use_occlusion == 1) {
+			light += u_ambient_light * occlusion;
+		}
+		else{
+			light += u_ambient_light;
+		}
+		
+		vec3 emissive_pixel = texture( u_emissive, v_uv ).xyz;
+		if (u_use_emissive == 1) {
+			light += emissive_pixel * u_emissive_factor;
+		}
 	}
-
 	FragColor.xyz = color.xyz * light;
 	FragColor.a = color.a;
 }

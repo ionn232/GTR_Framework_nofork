@@ -101,9 +101,10 @@ void Renderer::renderScene(SCN::Scene* scene, Camera* camera)
 				categorizeNodes(&pent->root, camera);
 		}
 		else if (ent->getType() == eEntityType::LIGHT && !disable_lights) { //light objects
+			//TODO: frustum culling for light optimization
 			//IDEA: test sphere in frustum to cull invisible point (+spot) lights
 			//IDEA: test spheres to bounding boxes and cull invisible lights
-			//TO-DO: pasar primero antes de render!! otro bucle!
+			
 			//downcast to EntityLight and store in light array
 			LightEntity* light = (SCN::LightEntity*)ent; 
 			lights.push_back(light);
@@ -300,12 +301,6 @@ void Renderer::renderMeshWithMaterialLights(const Matrix44 model, GFX::Mesh* mes
 	occlusion = material->textures[SCN::eTextureChannel::OCCLUSION].texture; int useOcclusion = 1;
 	metal_roughness = material->textures[SCN::eTextureChannel::METALLIC_ROUGHNESS].texture; int useSpecular = 1;
 	
-	
-	//TO-DO implement all this, check ppt
-	//texture = material->emissive_texture;				//DONE
-	//texture = material->metallic_roughness_texture;	//IN_PROGRESS
-	//texture = material->normal_texture;				//DONE
-	//texture = material->occlusion_texture;			//IN_PROGRESS
 
 	//get dummy textures if anything is missing
 	if (colorTexture == NULL) 
@@ -320,10 +315,14 @@ void Renderer::renderMeshWithMaterialLights(const Matrix44 model, GFX::Mesh* mes
 	}
 	if (occlusion == NULL) {
 		occlusion = GFX::Texture::getWhiteTexture();
-		useOcclusion = 0;
+		if (metal_roughness == NULL) { //occlusions can be here too
+			useOcclusion = 0;
+		}
 	}
 	if (metal_roughness == NULL) {
 		metal_roughness = GFX::Texture::getWhiteTexture();
+		if (material->metallic_factor == 0 && material->roughness_factor == 1) 
+		{ useSpecular = 0; }
 	}
 
 	//select the blending
@@ -363,6 +362,8 @@ void Renderer::renderMeshWithMaterialLights(const Matrix44 model, GFX::Mesh* mes
 	shader->setUniform("u_time", t);
 	shader->setUniform("u_ambient_light", scene->ambient_light);
 	shader->setUniform("u_emissive_factor", material->emissive_factor);
+	shader->setUniform("u_metal_factor", material->metallic_factor);
+	shader->setUniform("u_rough_factor", material->roughness_factor);
 
 	shader->setUniform("u_color", material->color);
 
@@ -432,7 +433,7 @@ void SCN::Renderer::lightToShaderSP(GFX::Shader* shader) {
 		light_positions[i] = lights[i]->root.model.getTranslation();
 		light_fronts[i] = lights[i]->root.model.frontVector().normalize();
 		light_colors[i] = lights[i]->color * lights[i]->intensity;
-		Vector2f currentCone = Vector2f(cos(lights[i]->cone_info.x * (PI/180.0)), cos(lights[i]->cone_info.y * (PI / 180.0)));
+		Vector2f currentCone = Vector2f(cos(lights[i]->cone_info.x * (PI/180.0)), cos(lights[i]->cone_info.y * (PI / 180.0))); //convert angles to cosinus
 		cones_info[i] = currentCone;
 		max_distances[i] = lights[i]->max_distance;
 		light_types[i] = (int)lights[i]->light_type;
@@ -450,7 +451,7 @@ void SCN::Renderer::lightToShaderMP(LightEntity* light, GFX::Shader* shader) {
 	Vector3f light_position = light->root.model.getTranslation();
 	Vector3f light_front = light->root.model.frontVector().normalize();
 	Vector3f light_color = light->color * light->intensity;
-	Vector2f cone_info = Vector2f(cos(light->cone_info.x * (PI / 180.0)), cos(light->cone_info.y * (PI / 180.0)));
+	Vector2f cone_info = Vector2f(cos(light->cone_info.x * (PI / 180.0)), cos(light->cone_info.y * (PI / 180.0))); //convert angle to cosinus
 	float max_distance = light->max_distance;
 	int light_type = (int)light->light_type;
 
@@ -475,9 +476,9 @@ void Renderer::showUI()
 		
 	ImGui::Checkbox("Wireframe", &render_wireframe);
 	ImGui::Checkbox("Boundaries", &render_boundaries);
-	ImGui::Checkbox("Multipass lights", &use_multipass);
 	ImGui::Checkbox("Render with lights", &render_lights);
 	ImGui::Checkbox("Disable lights", &disable_lights);
+	ImGui::Checkbox("Multipass lights", &use_multipass);
 	ImGui::Checkbox("use normalmaps", &gui_use_normalmaps);
 	ImGui::Checkbox("use emissive", &gui_use_emissive);
 	ImGui::Checkbox("use occlusion", &gui_use_occlusion);

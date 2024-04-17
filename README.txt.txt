@@ -10,11 +10,12 @@ renderables (didnt use structure seen in the lesson - done using the alredy exis
 alpha elements rendered last and sorted by distance
 
 - Phong: 
-ambient light + emissive + occlusion
+ambient light + emissive + occlusion (occlusion only implemented for red channel of roughness texture - not act)
 point light
 directional light
-spot light (TODO)
+spot light
 ranged attenuation
+specular light (using blinn-phong model as suggested)
 
 - Several lights: 
 single pass
@@ -23,15 +24,18 @@ frustum culling (TODO, test if sphere overlaps with bounding boxes and camera Bo
 
 
 (new) Render options:
-- Multipass lights		
-Render lights using single pass or multi pass implementation.
+Added a toggle for each of the lab's tasks for debugging and building the report.
 - Render with lights		
 Activate lab 1 implementation.
+- Disable lights
+Ignore light entities. (for debug purposes)
+- Multipass lights		
+Render lights using single pass or multi pass implementation.
 - Enable normals
-Account for normalmaps for rendering
+Account for normalmaps when rendering
 - Enable occlusion
-TODO
+Account for occlusion when rendering
 - Enable emissive
-Accouns for emissive texture when rendering
+Accouns for emissive materials when rendering
 - Enable specular
-TODO
+Accounts for specular lighting when rendering
