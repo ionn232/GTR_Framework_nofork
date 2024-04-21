@@ -34,11 +34,14 @@ namespace SCN {
 		bool gui_use_emissive = true;
 		bool gui_use_occlusion = true;
 		bool gui_use_specular = true;
+		bool gui_use_shadowmaps = true;
+		bool gui_better_shadowmaps = false;
 
 		GFX::Texture* skybox_cubemap;
 
 		GFX::FBO* shadowmapAtlas;
 		int prevAtlasSize = 0;
+		int numShadowmaps; //to avoid building an unnecesarily large atlas
 
 		SCN::Scene* scene;
 

@@ -154,10 +154,11 @@ uniform int u_light_type[MAX_LIGHTS];
 
 uniform int u_num_lights;
 
-uniform int u_light_cast_shadows;
+uniform int u_use_shadowmaps;
+uniform int u_light_cast_shadows[MAX_LIGHTS];
 uniform sampler2D u_shadowmap;
-uniform mat4 u_shadow_viewproj;
-uniform float u_shadow_bias;
+uniform mat4 u_shadow_viewproj[MAX_LIGHTS];
+uniform float u_shadow_bias[MAX_LIGHTS];
 
 out vec4 FragColor;
 
@@ -192,7 +193,7 @@ vec3 perturbNormal(vec3 N, vec3 WP, vec2 uv, vec3 normal_pixel)
 
 float computeShadow(vec3 wp, int i){
 	//project our 3D position to the shadowmap
-	vec4 proj_pos = u_shadow_viewproj * vec4(wp,1.0);
+	vec4 proj_pos = u_shadow_viewproj[i] * vec4(wp,1.0);
 
 	//from homogeneus space to clip space
 	vec2 shadow_uv = proj_pos.xy / proj_pos.w;
@@ -201,7 +202,7 @@ float computeShadow(vec3 wp, int i){
 	shadow_uv = shadow_uv * 0.5 + vec2(0.5);
 
 	//get point depth [-1 .. +1] in non-linear space
-	float real_depth = (proj_pos.z - u_shadow_bias) / proj_pos.w;
+	float real_depth = (proj_pos.z - u_shadow_bias[i]) / proj_pos.w;
 
 	//normalize from [-1..+1] to [0..+1] still non-linear
 	real_depth = real_depth * 0.5 + 0.5;
@@ -299,7 +300,13 @@ void main()
 					NdotL *= (cos_angle - u_cone_info[i].y) / (u_cone_info[i].x - u_cone_info[i].y);
 				}
 
-				light += (NdotL * u_light_col[i]) * att_factor;
+				//shadow value
+				float shadow_factor = 1.0;
+				if (u_light_cast_shadows[i] == 1 && u_use_shadowmaps == 1) {
+					shadow_factor = computeShadow(v_world_position, i);
+				}
+
+				light += (NdotL * u_light_col[i]) * att_factor * shadow_factor;
 
 				//specular value (blinn-phong)
 				if (u_use_specular == 1 && NdotL > 0.0) {
@@ -327,7 +334,7 @@ void main()
 
 				//shadow value
 				float shadow_factor = 1.0;
-				if (u_light_cast_shadows == 1) {
+				if (u_light_cast_shadows[i] == 1 && u_use_shadowmaps == 1) {
 					shadow_factor = computeShadow(v_world_position, i);
 				}
 				light += NdotL * u_light_col[i] * shadow_factor;

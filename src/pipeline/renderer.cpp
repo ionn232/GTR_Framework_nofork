@@ -32,7 +32,7 @@ GFX::Mesh sphere;
 std::vector<SCN::Node*> opaque_objects;
 std::vector<SCN::Node*> semitransparent_objects;
 std::vector<LightEntity*> lights;
-LightEntity* mainLight; //sunlight or equivalent (directional) light
+//LightEntity* mainLight; //sunlight or equivalent (directional) light
 
 bool compareDist(Node* s1, Node* s2) { 
 	return s1->distance_to_camera > s2->distance_to_camera;
@@ -65,48 +65,58 @@ void Renderer::setupScene()
 		skybox_cubemap = nullptr;
 
 	//clear node and light containers
-	mainLight = nullptr;
+	//mainLight = nullptr;
 	lights.clear();
 	semitransparent_objects.clear();
 	opaque_objects.clear();
-
+	numShadowmaps = 0;
 }
 
 int getSMapdDimensions(int numlights) {
 	return(ceil(sqrt((float)numlights)));
 }
+float getConeAngle(float min, float max) {
+	return 0;
+}
 
 void Renderer::generateShadowmaps() {
 	//IDEA: move directional lights to 'player' relative distance to better fit shadowmaps
-	LightEntity* currentLight = mainLight;
-	int shadowmap_size = 1024; //TODO: customizar tamaño en variable
-	int shadowatlas_size = getSMapdDimensions(1) * shadowmap_size; //TODO 1 -> lights.size()
-	if (currentLight != nullptr) {
-		if (currentLight->cast_shadows && (shadowmapAtlas == nullptr || prevAtlasSize != shadowatlas_size)) {
-			delete shadowmapAtlas;
-			shadowmapAtlas = new GFX::FBO();
-			shadowmapAtlas->setDepthOnly(shadowatlas_size, shadowatlas_size); 
-		}
-		shadowmapAtlas->bind();
+	int shadowmap_size = gui_better_shadowmaps ? 2048 : 1024; //TODO: customizar tamaño en variable
+	int shadowatlas_size = getSMapdDimensions(numShadowmaps) * shadowmap_size;
+	if (shadowmapAtlas == nullptr || prevAtlasSize != shadowatlas_size) {
+		delete shadowmapAtlas;
+		shadowmapAtlas = new GFX::FBO();
+		shadowmapAtlas->setDepthOnly(shadowatlas_size, shadowatlas_size);
+	}
+
+	shadowmapAtlas->bind();
+	Camera camera;
+	for (LightEntity* currentLight : lights) {
 		glClear(GL_DEPTH_BUFFER_BIT);
-		Camera camera;
-		vec3 position = currentLight->root.model.getTranslation();
-		camera.lookAt(position, position + currentLight->root.model.frontVector() * -1.0f, vec3(0, 1, 0));
 		//TODO: directional ortografic, spot perspective
-		camera.setOrthographic(currentLight->area * -0.5, currentLight->area * 0.5, currentLight->area * -0.5, currentLight->area * 0.5, currentLight->near_distance, currentLight->max_distance);
+		if (currentLight->light_type == eLightType::DIRECTIONAL) {
+			camera.setOrthographic(currentLight->area * -0.5, currentLight->area * 0.5, currentLight->area * -0.5, currentLight->area * 0.5, currentLight->near_distance, currentLight->max_distance);
+		}
+		else if (currentLight->light_type == eLightType::SPOT) {
+			camera.setPerspective(currentLight->cone_info.y*1.5f, 1.0f, currentLight->near_distance, currentLight->max_distance); //*1.5 to account for the difference in the cone being circular and the camera squared (get the cone inside the camera rather than having the camera inside the cone) //hack is non-functional for spotlights with lower angles
+		}
+		vec3 position = currentLight->root.model.getTranslation();
+		camera.lookAt(position, position + currentLight->root.model.frontVector().normalize() * -1.0f, vec3(0, 1, 0));
 		camera.enable();
+
 		//render all opaque nodes
 		for (Node* currentObj : opaque_objects) {
-			BoundingBox world_bounding = transformBoundingBox(currentObj->model, currentObj->getBoundingBox());
+			BoundingBox world_bounding = transformBoundingBox(currentObj->getGlobalMatrix(), currentObj->getBoundingBox());
+			//BoundingBox world_bounding = transformBoundingBox(node_model, node->mesh->box);
 			//frustum culling for shadowmaps
 			if (camera.testBoxInFrustum(world_bounding.center, world_bounding.halfsize)) {
 				renderShadowmap(currentObj->getGlobalMatrix(), currentObj->mesh, currentObj->material);
 			}
 		}
-		shadowmapAtlas->unbind();
 		currentLight->shadowmap_viewprojection = camera.viewprojection_matrix;
-		prevAtlasSize = shadowatlas_size;
 	}
+	shadowmapAtlas->unbind();
+	prevAtlasSize = shadowatlas_size;
 }
 
 void Renderer::renderShadowmap(const Matrix44 model, GFX::Mesh* mesh, SCN::Material* material) {
@@ -205,13 +215,16 @@ void Renderer::renderScene(SCN::Scene* scene, Camera* camera)
 			//IDEA: test spheres to bounding boxes and cull invisible lights
 			//downcast to EntityLight and store in light array if it affects objects in the scene
 			LightEntity* light = (SCN::LightEntity*)ent; 
-			if (light->light_type == eLightType::DIRECTIONAL || camera->testSphereInFrustum(light->root.model.getTranslation(), light->max_distance) == CLIP_INSIDE) { //simple frustum culling
+			if (light->light_type == eLightType::DIRECTIONAL || camera->testSphereInFrustum(light->root.model.getTranslation(), light->max_distance) == CLIP_INSIDE) { //simple frustum culling (for point and spotlight)
 				lights.push_back(light);
+				if (light->cast_shadows) {
+					numShadowmaps += 1;
+				}
 			}
-			//assign first encountered directional light to main light
+			/* //assign first encountered directional light to main light
 			if (!mainLight && light->light_type == eLightType::DIRECTIONAL) {
 				mainLight = light;
-			}
+			} */
 		}
 	}
 	generateShadowmaps(); //uses light container
@@ -489,6 +502,8 @@ void Renderer::renderMeshWithMaterialLights(const Matrix44 model, GFX::Mesh* mes
 	
 	shader->setUniform("u_shadowmap", shadowmapAtlas->depth_texture, 8);
 
+	shader->setUniform("u_use_shadowmaps", gui_use_shadowmaps);
+
 	//this is used to say which is the alpha threshold to what we should not paint a pixel on the screen (to cut polygons according to texture alpha)
 	shader->setUniform("u_alpha_cutoff", material->alpha_mode == SCN::eAlphaMode::MASK ? material->alpha_cutoff : 0.001f);
 
@@ -559,12 +574,9 @@ void SCN::Renderer::lightToShaderSP(GFX::Shader* shader) {
 	shader->setUniform2Array("u_cone_info", (float*)&cones_info, MAX_LIGHTS_SP);
 	shader->setUniform1Array("u_max_distance", (float*)&max_distances, MAX_LIGHTS_SP);
 	shader->setUniform1Array("u_light_type", (int*)&light_types, MAX_LIGHTS_SP);
-	//shader->setUniform1Array("u_light_cast_shadows", (int*)&lights_cast_shadows, MAX_LIGHTS_SP);
-	//shader->setMatrix44Array("u_shadow_viewproj", (Matrix44*)&shadow_viewprojections, MAX_LIGHTS_SP);
-	//shader->setUniform1Array("u_shadow_bias", (float*)&shadow_biases, MAX_LIGHTS_SP);
-	shader->setUniform("u_shadow_viewproj", mainLight->shadowmap_viewprojection);
-	shader->setUniform("u_shadow_bias", mainLight->shadow_bias);
-	shader->setUniform("u_light_cast_shadows", 1);
+	shader->setUniform1Array("u_light_cast_shadows", (int*)&lights_cast_shadows, MAX_LIGHTS_SP);
+	shader->setMatrix44Array("u_shadow_viewproj", (Matrix44*)&shadow_viewprojections, MAX_LIGHTS_SP);
+	shader->setUniform1Array("u_shadow_bias", (float*)&shadow_biases, MAX_LIGHTS_SP);
 }
 
 void SCN::Renderer::lightToShaderMP(LightEntity* light, GFX::Shader* shader) {
@@ -603,6 +615,8 @@ void Renderer::showUI()
 	ImGui::Checkbox("use emissive", &gui_use_emissive);
 	ImGui::Checkbox("use occlusion", &gui_use_occlusion);
 	ImGui::Checkbox("use specular", &gui_use_specular);
+	ImGui::Checkbox("use shadowmaps", &gui_use_shadowmaps);
+	ImGui::Checkbox("better shadowmaps", &gui_better_shadowmaps);
 
 
 
