@@ -257,11 +257,11 @@ void main()
 				att_factor = max(att_factor, 0.0);
 
 				float cos_angle = dot(u_light_front[i], L);
-				if (cos_angle < u_cone_info[i].x) {
+				if (cos_angle < u_cone_info[i].y) {
 					NdotL = 0.0;
 				}
-				else if (cos_angle < u_cone_info[i].y) {
-					NdotL *= (cos_angle - u_cone_info[i].x) / (u_cone_info[i].y - u_cone_info[i].x);
+				else if (cos_angle < u_cone_info[i].x) {
+					NdotL *= (cos_angle - u_cone_info[i].y) / (u_cone_info[i].x - u_cone_info[i].y);
 				}
 
 				light += (NdotL * u_light_col[i]) * att_factor;
@@ -274,11 +274,11 @@ void main()
 					float final_ks = spec_ks * u_metal_factor;
 
 					float cos_angle = dot(u_light_front[i], L);
-					if (cos_angle < u_cone_info[i].x) {
+					if (cos_angle < u_cone_info[i].y) {
 						NdotH = 0;
 					}
-					else if (cos_angle < u_cone_info[i].y) {
-						NdotH *= (cos_angle - u_cone_info[i].x) / (u_cone_info[i].y - u_cone_info[i].x);
+					else if (cos_angle < u_cone_info[i].x) {
+						NdotH *= (cos_angle - u_cone_info[i].y) / (u_cone_info[i].x - u_cone_info[i].y);
 					}
 
 					if (final_a != 0) {light += final_ks * pow(NdotH, final_a) * u_light_col[i] * att_factor; }
@@ -439,11 +439,11 @@ void main()
 		att_factor = max(att_factor, 0.0);
 
 		float cos_angle = dot(u_light_front, L);
-		if (cos_angle < u_cone_info.x) {
+		if (cos_angle < u_cone_info.y) {
 			NdotL = 0.0;
 		}
-		else if (cos_angle < u_cone_info.y) {
-			NdotL *= (cos_angle - u_cone_info.x) / (u_cone_info.y - u_cone_info.x);
+		else if (cos_angle < u_cone_info.x) {
+			NdotL *= (cos_angle - u_cone_info.y) / (u_cone_info.x - u_cone_info.y);
 		}
 
 		light += (NdotL * u_light_col) * att_factor;
@@ -456,11 +456,11 @@ void main()
 			float final_ks = spec_ks * u_metal_factor;
 
 			float cos_angle = dot(u_light_front, L);
-			if (cos_angle < u_cone_info.x) {
+			if (cos_angle < u_cone_info.y) {
 				NdotH = 0;
 			}
-			else if (cos_angle < u_cone_info.y) {
-				NdotH *= (cos_angle - u_cone_info.x) / (u_cone_info.y - u_cone_info.x);
+			else if (cos_angle < u_cone_info.x) {
+				NdotH *= (cos_angle - u_cone_info.y) / (u_cone_info.x - u_cone_info.y);
 			}
 
 			if (final_a != 0) {light += final_ks * pow(NdotH, final_a) * u_light_col * att_factor; }

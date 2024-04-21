@@ -101,13 +101,12 @@ void Renderer::renderScene(SCN::Scene* scene, Camera* camera)
 				categorizeNodes(&pent->root, camera);
 		}
 		else if (ent->getType() == eEntityType::LIGHT && !disable_lights) { //light objects
-			//TODO: frustum culling for light optimization
-			//IDEA: test sphere in frustum to cull invisible point (+spot) lights
 			//IDEA: test spheres to bounding boxes and cull invisible lights
-			
-			//downcast to EntityLight and store in light array
+			//downcast to EntityLight and store in light array if it affects objects in the scene
 			LightEntity* light = (SCN::LightEntity*)ent; 
-			lights.push_back(light);
+			if ((light->getType() == eLightType::POINT || light->getType() == eLightType::SPOT) && camera->testSphereInFrustum(light->root.model.getTranslation(), light->max_distance) == CLIP_INSIDE) { //simple frustum culling
+				lights.push_back(light);
+			}
 		}
 	}
 	//pass 2: render entities
