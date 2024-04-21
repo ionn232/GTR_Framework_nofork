@@ -20,7 +20,11 @@ specular light (using blinn-phong model as suggested)
 - Several lights: 
 single pass
 multi pass (some inconsistencies in directional lights)
-frustum culling (TODO, test if sphere overlaps with bounding boxes and camera BoundingBoxSphereOverlap no implementado asi testear)
+frustum culling 
+further optimization (TODO, test if sphere overlaps with bounding boxes and camera BoundingBoxSphereOverlap no implementado asi testear)
+
+- Shadows:
+todo: direccional se mueve, interpolacion lineal, multi-pass
 
 
 (new) Render options:

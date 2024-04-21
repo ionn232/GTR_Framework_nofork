@@ -82,7 +82,8 @@ float getConeAngle(float min, float max) {
 void Renderer::generateShadowmaps() {
 	//IDEA: move directional lights to 'player' relative distance to better fit shadowmaps
 	int shadowmap_size = gui_better_shadowmaps ? 2048 : 1024; //TODO: customizar tamaño en variable
-	int shadowatlas_size = getSMapdDimensions(numShadowmaps) * shadowmap_size;
+	int atlas_dimensions = getSMapdDimensions(numShadowmaps);
+	int shadowatlas_size = atlas_dimensions * shadowmap_size;
 	if (shadowmapAtlas == nullptr || prevAtlasSize != shadowatlas_size) {
 		delete shadowmapAtlas;
 		shadowmapAtlas = new GFX::FBO();
@@ -91,30 +92,43 @@ void Renderer::generateShadowmaps() {
 
 	shadowmapAtlas->bind();
 	Camera camera;
+	int light_index_i = 0;
+	int light_index_j = 0;
+	glClear(GL_DEPTH_BUFFER_BIT);
 	for (LightEntity* currentLight : lights) {
-		glClear(GL_DEPTH_BUFFER_BIT);
-		//TODO: directional ortografic, spot perspective
-		if (currentLight->light_type == eLightType::DIRECTIONAL) {
-			camera.setOrthographic(currentLight->area * -0.5, currentLight->area * 0.5, currentLight->area * -0.5, currentLight->area * 0.5, currentLight->near_distance, currentLight->max_distance);
-		}
-		else if (currentLight->light_type == eLightType::SPOT) {
-			camera.setPerspective(currentLight->cone_info.y*1.5f, 1.0f, currentLight->near_distance, currentLight->max_distance); //*1.5 to account for the difference in the cone being circular and the camera squared (get the cone inside the camera rather than having the camera inside the cone) //hack is non-functional for spotlights with lower angles
-		}
-		vec3 position = currentLight->root.model.getTranslation();
-		camera.lookAt(position, position + currentLight->root.model.frontVector().normalize() * -1.0f, vec3(0, 1, 0));
-		camera.enable();
+		if (currentLight->cast_shadows) {
+			glViewport((light_index_i * shadowmap_size), (light_index_j * shadowmap_size), shadowmap_size, shadowmap_size);
+			//glScissor((light_index_i * shadowmap_size), (light_index_j * shadowmap_size), shadowmap_size, shadowmap_size);
+			//glEnable(GL_SCISSOR_TEST);
+			//glClear(GL_DEPTH_TEST);
 
-		//render all opaque nodes
-		for (Node* currentObj : opaque_objects) {
-			BoundingBox world_bounding = transformBoundingBox(currentObj->getGlobalMatrix(), currentObj->getBoundingBox());
-			//BoundingBox world_bounding = transformBoundingBox(node_model, node->mesh->box);
-			//frustum culling for shadowmaps
-			if (camera.testBoxInFrustum(world_bounding.center, world_bounding.halfsize)) {
-				renderShadowmap(currentObj->getGlobalMatrix(), currentObj->mesh, currentObj->material);
+			if (currentLight->light_type == eLightType::DIRECTIONAL) {
+				camera.setOrthographic(currentLight->area * -0.5, currentLight->area * 0.5, currentLight->area * -0.5, currentLight->area * 0.5, currentLight->near_distance, currentLight->max_distance);
 			}
+			else if (currentLight->light_type == eLightType::SPOT) {
+				camera.setPerspective(currentLight->cone_info.y * 1.5f, 1.0f, currentLight->near_distance, currentLight->max_distance); //*1.5 to account for the difference in the cone being circular and the camera squared (get the cone inside the camera rather than having the camera inside the cone) //hack is non-functional for spotlights with lower angles
+			}
+			vec3 position = currentLight->root.model.getTranslation();
+			camera.lookAt(position, position + currentLight->root.model.frontVector().normalize() * -1.0f, vec3(0, 1, 0));
+			camera.enable();
+
+			//render all opaque nodes
+			for (Node* currentObj : opaque_objects) {
+				BoundingBox world_bounding = transformBoundingBox(currentObj->getGlobalMatrix(), currentObj->getBoundingBox());
+				//BoundingBox world_bounding = transformBoundingBox(node_model, node->mesh->box);
+				//frustum culling for shadowmaps
+				if (camera.testBoxInFrustum(world_bounding.center, world_bounding.halfsize)) {
+					renderShadowmap(currentObj->getGlobalMatrix(), currentObj->mesh, currentObj->material);
+				}
+			}
+			currentLight->shadowmap_viewprojection = camera.viewprojection_matrix;
+			//update shadowmap indexes
+			light_index_i += 1;
+			if (light_index_i >= atlas_dimensions) { light_index_i = 0; light_index_j += 1; }
 		}
-		currentLight->shadowmap_viewprojection = camera.viewprojection_matrix;
 	}
+	//glEnable(GL_DEPTH_TEST);
+	//glClear(GL_SCISSOR_TEST);
 	shadowmapAtlas->unbind();
 	prevAtlasSize = shadowatlas_size;
 }
