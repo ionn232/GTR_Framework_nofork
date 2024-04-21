@@ -29,9 +29,10 @@ GFX::Mesh sphere;
 //	float distanceToCamera;
 //};
 
-std::vector<SCN::Node*> default_objects;
+std::vector<SCN::Node*> opaque_objects;
 std::vector<SCN::Node*> semitransparent_objects;
 std::vector<LightEntity*> lights;
+LightEntity* mainLight; //sunlight or equivalent (directional) light
 
 bool compareDist(Node* s1, Node* s2) { 
 	return s1->distance_to_camera > s2->distance_to_camera;
@@ -46,6 +47,7 @@ Renderer::Renderer(const char* shader_atlas_filename)
 	use_multipass = false;
 	render_lights = true;
 	disable_lights = false;
+	shadowmapAtlas = nullptr; //TODO remove shadowmaps in lights
 
 	if (!GFX::Shader::LoadAtlas(shader_atlas_filename))
 		exit(1);
@@ -61,16 +63,107 @@ void Renderer::setupScene()
 		skybox_cubemap = GFX::Texture::Get(std::string(scene->base_folder + "/" + scene->skybox_filename).c_str());
 	else
 		skybox_cubemap = nullptr;
+
+	//clear node and light containers
+	mainLight = nullptr;
+	lights.clear();
+	semitransparent_objects.clear();
+	opaque_objects.clear();
+
+}
+
+void Renderer::generateShadowmaps() {
+
+	//IDEA: move directional lights to 'player' relative distance to better fit shadowmaps
+	LightEntity* currentLight = mainLight;
+	if (currentLight != nullptr) {
+		if (currentLight->cast_shadows && currentLight->shadowmap_fbo == nullptr) {
+			currentLight->shadowmap_fbo = new GFX::FBO();
+			currentLight->shadowmap_fbo->setDepthOnly(1024, 1024); //TODO: customizar tamaño en variable (IMPORTANTE USAR DESTRUCTOR AL CREAR NUEVO FBO)
+		}
+		currentLight->shadowmap_fbo->bind();
+		glClear(GL_DEPTH_BUFFER_BIT);
+		Camera camera;
+		vec3 position = currentLight->root.model.getTranslation();
+		camera.lookAt(position, position + currentLight->root.model.frontVector() * -1.0f, vec3(0, 1, 0));
+		//TODO: directional ortografic, spot perspective
+		camera.setOrthographic(currentLight->area * -0.5, currentLight->area * 0.5, currentLight->area * -0.5, currentLight->area * 0.5, currentLight->near_distance, currentLight->max_distance);
+		camera.enable();
+		//render all opaque nodes
+		for (Node* currentObj : opaque_objects) {
+			BoundingBox world_bounding = transformBoundingBox(currentObj->model, currentObj->getBoundingBox());
+			//frustum culling for shadowmaps
+			if (camera.testBoxInFrustum(world_bounding.center, world_bounding.halfsize)) {
+				renderShadowmap(currentObj->getGlobalMatrix(), currentObj->mesh, currentObj->material);
+			}
+		}
+		currentLight->shadowmap_fbo->unbind();
+	}
+}
+
+void Renderer::renderShadowmap(const Matrix44 model, GFX::Mesh* mesh, SCN::Material* material) {
+	//in case there is nothing to do
+	if (!mesh || !mesh->getNumVertices() || !material)
+		return;
+	assert(glGetError() == GL_NO_ERROR);
+
+	Camera* camera = Camera::current;
+
+	//define locals to simplify coding
+	GFX::Shader* shader = NULL;
+	GFX::Texture* texture = NULL;
+
+	texture = material->textures[SCN::eTextureChannel::ALBEDO].texture;
+	if (texture == NULL)
+		texture = GFX::Texture::getWhiteTexture(); //a 1x1 white texture
+
+	//select the blending
+	glDisable(GL_BLEND);
+	//select if render both sides of the triangles
+	if (material->two_sided)
+		glDisable(GL_CULL_FACE);
+	else
+		glEnable(GL_CULL_FACE);
+
+
+	assert(glGetError() == GL_NO_ERROR);
+
+	glEnable(GL_DEPTH_TEST);
+
+	//chose a shader
+	shader = GFX::Shader::Get("texture");
+
+	assert(glGetError() == GL_NO_ERROR);
+
+	//no shader? then nothing to render
+	if (!shader)
+		return;
+	shader->enable();
+
+	//upload uniforms
+	shader->setUniform("u_model", model);
+	cameraToShader(camera, shader);
+	float t = getTime();
+	shader->setUniform("u_time", t);
+
+	shader->setUniform("u_color", material->color);
+	if (texture)
+		shader->setUniform("u_texture", texture, 0);
+
+	//this is used to say which is the alpha threshold to what we should not paint a pixel on the screen (to cut polygons according to texture alpha)
+	shader->setUniform("u_alpha_cutoff", material->alpha_mode == SCN::eAlphaMode::MASK ? material->alpha_cutoff : 0.001f);
+
+	//do the draw call that renders the mesh into the screen
+	mesh->render(GL_TRIANGLES);
+
+	//disable shader
+	shader->disable();
 }
 
 void Renderer::renderScene(SCN::Scene* scene, Camera* camera)
 {
 	this->scene = scene;
 	setupScene();
-	//clear lights and semitransparent nodes
-	lights.clear();
-	semitransparent_objects.clear();
-	default_objects.clear();
 
 	glDisable(GL_BLEND);
 	glEnable(GL_DEPTH_TEST);
@@ -104,15 +197,21 @@ void Renderer::renderScene(SCN::Scene* scene, Camera* camera)
 			//IDEA: test spheres to bounding boxes and cull invisible lights
 			//downcast to EntityLight and store in light array if it affects objects in the scene
 			LightEntity* light = (SCN::LightEntity*)ent; 
-			if ((light->getType() == eLightType::POINT || light->getType() == eLightType::SPOT) && camera->testSphereInFrustum(light->root.model.getTranslation(), light->max_distance) == CLIP_INSIDE) { //simple frustum culling
+			if (light->light_type == eLightType::DIRECTIONAL || camera->testSphereInFrustum(light->root.model.getTranslation(), light->max_distance) == CLIP_INSIDE) { //simple frustum culling
 				lights.push_back(light);
+			}
+			//assign first encountered directional light to main light
+			if (!mainLight && light->light_type == eLightType::DIRECTIONAL) {
+				mainLight = light;
 			}
 		}
 	}
+	generateShadowmaps(); //uses light container
+	camera->enable(); //reactivate scene camera
 	//pass 2: render entities
-	for (int i = 0; i < default_objects.size(); i++)
+	for (int i = 0; i < opaque_objects.size(); i++)
 	{
-		renderNode(default_objects[i], camera);
+		renderNode(opaque_objects[i], camera);
 	}
 	//render semitransparent entities
 	//sort blending vector - sorts nodes by distance in descending order
@@ -190,7 +289,7 @@ void Renderer::categorizeNodes(SCN::Node* node, Camera* camera) { //adds node an
 		/*Matrix44 global_model = node->getGlobalMatrix();
 		float dist = std::sqrt(std::pow(global_model.getTranslation().x - camera->eye.x, 2) + std::pow(global_model.getTranslation().y - camera->eye.y, 2) + std::pow(global_model.getTranslation().z - camera->eye.z, 2));
 		node->distance_to_camera = dist; */
-		default_objects.push_back(node);
+		opaque_objects.push_back(node);
 	}
 	//iterate recursively with children
 	for (int i = 0; i < node->children.size(); ++i) {

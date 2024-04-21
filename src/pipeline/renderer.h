@@ -37,6 +37,8 @@ namespace SCN {
 
 		GFX::Texture* skybox_cubemap;
 
+		GFX::Texture* shadowmapAtlas;
+
 		SCN::Scene* scene;
 
 		//updated every frame
@@ -66,7 +68,11 @@ namespace SCN {
 		//lab1
 		void renderMeshWithMaterialLights(const Matrix44 model, GFX::Mesh* mesh, SCN::Material* material);
 
+		void renderShadowmap(const Matrix44 model, GFX::Mesh* mesh, SCN::Material* material);
+
 		void showUI();
+
+		void generateShadowmaps();
 
 		void cameraToShader(Camera* camera, GFX::Shader* shader); //sends camera uniforms to shader
 		void lightToShaderSP(GFX::Shader* shader); //send light uniforms to shader for single-pass rendering

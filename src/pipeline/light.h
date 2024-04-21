@@ -1,6 +1,7 @@
 #pragma once
 
 #include "scene.h"
+#include "../gfx/fbo.h"
 
 namespace SCN {
 
@@ -25,6 +26,8 @@ namespace SCN {
 		float shadow_bias;
 		vec2 cone_info;
 		float area; //for direct;
+
+		GFX::FBO* shadowmap_fbo;
 
 		ENTITY_METHODS(LightEntity, LIGHT, 14,4);
 

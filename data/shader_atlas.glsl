@@ -154,6 +154,11 @@ uniform int u_light_type[MAX_LIGHTS];
 
 uniform int u_num_lights;
 
+uniform int u_light_cast_shadows[MAX_LIGHTS];
+uniform sampler2D u_shadowmap;
+uniform mat4 u_shadow_viewproj[MAX_LIGHTS];
+uniform float u_shadow_bias[MAX_LIGHTS];
+
 out vec4 FragColor;
 
 mat3 cotangent_frame(vec3 N, vec3 p, vec2 uv)
@@ -185,8 +190,38 @@ vec3 perturbNormal(vec3 N, vec3 WP, vec2 uv, vec3 normal_pixel)
 	return normalize(TBN * normal_pixel);
 }
 
+float computeShadow(vec3 wp, int i){
+	//project our 3D position to the shadowmap
+	vec4 proj_pos = u_shadow_viewproj[i] * vec4(wp,1.0);
+
+	//from homogeneus space to clip space
+	vec2 shadow_uv = proj_pos.xy / proj_pos.w;
+
+	//from clip space to uv space
+	shadow_uv = shadow_uv * 0.5 + vec2(0.5);
+
+	//get point depth [-1 .. +1] in non-linear space
+	float real_depth = (proj_pos.z - u_shadow_bias[i]) / proj_pos.w;
+
+	//normalize from [-1..+1] to [0..+1] still non-linear
+	real_depth = real_depth * 0.5 + 0.5;
+
+	//read depth from depth buffer in [0..+1] non-linear
+	float shadow_depth = texture( u_shadowmap, shadow_uv).x;
+
+	//compute final shadow factor by comparing
+	float shadow_factor = 1.0;
+
+	//we can compare them, even if they are not linear
+	if( shadow_depth < real_depth ) {
+		shadow_factor = 0.0;
+	}
+	return shadow_factor;
+}
+
 void main()
 {
+	
 	vec2 uv = v_uv;
 	vec4 color = u_color;
 	color *= texture( u_texture, v_uv );
@@ -236,7 +271,7 @@ void main()
 				light += (NdotL * u_light_col[i]) * att_factor;
 
 				//specular value (blinn-phong)
-				if (u_use_specular == 1) {
+				if (u_use_specular == 1 && NdotL > 0.0) {
 					vec3 H = normalize(L + V);
 					float NdotH = clamp(dot(N, H), 0.0, 1.0);
 					float final_a = 1-(spec_a * u_rough_factor);
@@ -267,7 +302,7 @@ void main()
 				light += (NdotL * u_light_col[i]) * att_factor;
 
 				//specular value (blinn-phong)
-				if (u_use_specular == 1) {
+				if (u_use_specular == 1 && NdotL > 0.0) {
 					vec3 H = normalize(L + V);
 					float NdotH = clamp(dot(N, H), 0.0, 1.0);
 					float final_a = 1-(spec_a * u_rough_factor);
@@ -290,10 +325,15 @@ void main()
 				L = normalize(L);
 				float NdotL = clamp(dot(N, L), 0.0, 1.0);
 
-				light += NdotL * u_light_col[i];
+				//shadow value
+				float shadow_factor = 1.0;
+				if (u_light_cast_shadows[i] == 1) {
+					shadow_factor = computeShadow(v_world_position, i);
+				}
+				light += NdotL * u_light_col[i] * shadow_factor;
 
 				//specular value (blinn-phong)
-				if (u_use_specular == 1) {
+				if (u_use_specular == 1 && NdotL > 0.0) {
 					vec3 H = normalize(L + V);
 					float NdotH = clamp(dot(N, H), 0.0, 1.0);
 					float final_a = 1-(spec_a * u_rough_factor);
@@ -419,7 +459,7 @@ void main()
 		light += (NdotL * u_light_col) * att_factor;
 
 		//specular value (blinn-phong)
-		if (u_use_specular == 1) {
+		if (u_use_specular == 1 && NdotL > 0.0) {
 			vec3 H = normalize(L + V);
 			float NdotH = clamp(dot(N, H), 0.0, 1.0);
 			float final_a = 1-(spec_a * u_rough_factor);
@@ -449,7 +489,7 @@ void main()
 		light += (NdotL * u_light_col) * att_factor;
 
 		//specular value (blinn-phong)
-		if (u_use_specular == 1) {
+		if (u_use_specular == 1 && NdotL > 0.0) {
 			vec3 H = normalize(L + V);
 			float NdotH = clamp(dot(N, H), 0.0, 1.0);
 			float final_a = 1-(spec_a * u_rough_factor);
@@ -475,7 +515,7 @@ void main()
 		light += NdotL * u_light_col;
 
 		//specular value (blinn-phong)
-		if (u_use_specular == 1) {
+		if (u_use_specular == 1 && NdotL > 0.0) {
 			vec3 H = normalize(L + V);
 			float NdotH = clamp(dot(N, H), 0.0, 1.0);
 			float final_a = 1-(spec_a * u_rough_factor);
