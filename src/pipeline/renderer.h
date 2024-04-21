@@ -37,7 +37,8 @@ namespace SCN {
 
 		GFX::Texture* skybox_cubemap;
 
-		GFX::Texture* shadowmapAtlas;
+		GFX::FBO* shadowmapAtlas;
+		int prevAtlasSize = 0;
 
 		SCN::Scene* scene;
 

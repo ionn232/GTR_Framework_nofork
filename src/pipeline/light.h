@@ -28,6 +28,7 @@ namespace SCN {
 		float area; //for direct;
 
 		GFX::FBO* shadowmap_fbo;
+		mat4 shadowmap_viewprojection;
 
 		ENTITY_METHODS(LightEntity, LIGHT, 14,4);
 

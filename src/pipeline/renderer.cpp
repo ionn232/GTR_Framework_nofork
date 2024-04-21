@@ -72,16 +72,22 @@ void Renderer::setupScene()
 
 }
 
-void Renderer::generateShadowmaps() {
+int getSMapdDimensions(int numlights) {
+	return(ceil(sqrt((float)numlights)));
+}
 
+void Renderer::generateShadowmaps() {
 	//IDEA: move directional lights to 'player' relative distance to better fit shadowmaps
 	LightEntity* currentLight = mainLight;
+	int shadowmap_size = 1024; //TODO: customizar tamaño en variable
+	int shadowatlas_size = getSMapdDimensions(1) * shadowmap_size; //TODO 1 -> lights.size()
 	if (currentLight != nullptr) {
-		if (currentLight->cast_shadows && currentLight->shadowmap_fbo == nullptr) {
-			currentLight->shadowmap_fbo = new GFX::FBO();
-			currentLight->shadowmap_fbo->setDepthOnly(1024, 1024); //TODO: customizar tamaño en variable (IMPORTANTE USAR DESTRUCTOR AL CREAR NUEVO FBO)
+		if (currentLight->cast_shadows && (shadowmapAtlas == nullptr || prevAtlasSize != shadowatlas_size)) {
+			delete shadowmapAtlas;
+			shadowmapAtlas = new GFX::FBO();
+			shadowmapAtlas->setDepthOnly(shadowatlas_size, shadowatlas_size); 
 		}
-		currentLight->shadowmap_fbo->bind();
+		shadowmapAtlas->bind();
 		glClear(GL_DEPTH_BUFFER_BIT);
 		Camera camera;
 		vec3 position = currentLight->root.model.getTranslation();
@@ -97,7 +103,9 @@ void Renderer::generateShadowmaps() {
 				renderShadowmap(currentObj->getGlobalMatrix(), currentObj->mesh, currentObj->material);
 			}
 		}
-		currentLight->shadowmap_fbo->unbind();
+		shadowmapAtlas->unbind();
+		currentLight->shadowmap_viewprojection = camera.viewprojection_matrix;
+		prevAtlasSize = shadowatlas_size;
 	}
 }
 
@@ -479,6 +487,7 @@ void Renderer::renderMeshWithMaterialLights(const Matrix44 model, GFX::Mesh* mes
 	shader->setUniform("u_use_occlusion", useOcclusion);
 	shader->setUniform("u_use_specular", useSpecular);
 	
+	shader->setUniform("u_shadowmap", shadowmapAtlas->depth_texture, 8);
 
 	//this is used to say which is the alpha threshold to what we should not paint a pixel on the screen (to cut polygons according to texture alpha)
 	shader->setUniform("u_alpha_cutoff", material->alpha_mode == SCN::eAlphaMode::MASK ? material->alpha_cutoff : 0.001f);
@@ -526,6 +535,9 @@ void SCN::Renderer::lightToShaderSP(GFX::Shader* shader) {
 	Vector2f cones_info[MAX_LIGHTS_SP];
 	float max_distances[MAX_LIGHTS_SP];
 	int light_types[MAX_LIGHTS_SP];
+	int lights_cast_shadows[MAX_LIGHTS_SP];
+	mat4 shadow_viewprojections[MAX_LIGHTS_SP];
+	float shadow_biases[MAX_LIGHTS_SP];
 	int num_lights = lights.size();
 	for (int i = 0; i < num_lights; i++) {
 		light_positions[i] = lights[i]->root.model.getTranslation();
@@ -535,6 +547,10 @@ void SCN::Renderer::lightToShaderSP(GFX::Shader* shader) {
 		cones_info[i] = currentCone;
 		max_distances[i] = lights[i]->max_distance;
 		light_types[i] = (int)lights[i]->light_type;
+		lights_cast_shadows[i] = (int)lights[i]->cast_shadows;
+		shadow_viewprojections[i] = lights[i]->shadowmap_viewprojection;
+		shadow_biases[i] = lights[i]->shadow_bias;
+
 	}
 	shader->setUniform("u_num_lights", num_lights);
 	shader->setUniform3Array("u_light_pos", (float*)&light_positions, MAX_LIGHTS_SP);
@@ -543,6 +559,12 @@ void SCN::Renderer::lightToShaderSP(GFX::Shader* shader) {
 	shader->setUniform2Array("u_cone_info", (float*)&cones_info, MAX_LIGHTS_SP);
 	shader->setUniform1Array("u_max_distance", (float*)&max_distances, MAX_LIGHTS_SP);
 	shader->setUniform1Array("u_light_type", (int*)&light_types, MAX_LIGHTS_SP);
+	//shader->setUniform1Array("u_light_cast_shadows", (int*)&lights_cast_shadows, MAX_LIGHTS_SP);
+	//shader->setMatrix44Array("u_shadow_viewproj", (Matrix44*)&shadow_viewprojections, MAX_LIGHTS_SP);
+	//shader->setUniform1Array("u_shadow_bias", (float*)&shadow_biases, MAX_LIGHTS_SP);
+	shader->setUniform("u_shadow_viewproj", mainLight->shadowmap_viewprojection);
+	shader->setUniform("u_shadow_bias", mainLight->shadow_bias);
+	shader->setUniform("u_light_cast_shadows", 1);
 }
 
 void SCN::Renderer::lightToShaderMP(LightEntity* light, GFX::Shader* shader) {
