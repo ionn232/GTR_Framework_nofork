@@ -24,7 +24,12 @@ frustum culling
 further optimization (TODO, test if sphere overlaps with bounding boxes and camera BoundingBoxSphereOverlap no implementado asi testear)
 
 - Shadows:
-todo: direccional se mueve, interpolacion lineal, multi-pass
+Spotlight
+Directional light
+Shadow atlas
+Single pass + multi pass
+shadowmap resizing
+optimizations: direccional se mueve, interpolacion lineal, multi-pass (TO-DO)
 
 
 (new) Render options:
@@ -43,3 +48,5 @@ Account for occlusion when rendering
 Accouns for emissive materials when rendering
 - Enable specular
 Accounts for specular lighting when rendering
+- Enable shadowmaps
+Directional and spot lights cast shadows

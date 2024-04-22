@@ -47,7 +47,7 @@ Renderer::Renderer(const char* shader_atlas_filename)
 	use_multipass = false;
 	render_lights = true;
 	disable_lights = false;
-	shadowmapAtlas = nullptr; //TODO remove shadowmaps in lights
+	shadowmapAtlas = nullptr;
 
 	if (!GFX::Shader::LoadAtlas(shader_atlas_filename))
 		exit(1);
@@ -232,13 +232,10 @@ void Renderer::renderScene(SCN::Scene* scene, Camera* camera)
 			if (light->light_type == eLightType::DIRECTIONAL || camera->testSphereInFrustum(light->root.model.getTranslation(), light->max_distance) == CLIP_INSIDE) { //simple frustum culling (for point and spotlight)
 				lights.push_back(light);
 				if (light->cast_shadows) {
+					light->shadowmap_index = numShadowmaps;
 					numShadowmaps += 1;
 				}
 			}
-			/* //assign first encountered directional light to main light
-			if (!mainLight && light->light_type == eLightType::DIRECTIONAL) {
-				mainLight = light;
-			} */
 		}
 	}
 	generateShadowmaps(); //uses light container
@@ -513,8 +510,8 @@ void Renderer::renderMeshWithMaterialLights(const Matrix44 model, GFX::Mesh* mes
 	useSpecular = gui_use_specular ? useSpecular : 0;
 	shader->setUniform("u_use_occlusion", useOcclusion);
 	shader->setUniform("u_use_specular", useSpecular);
-	
 	shader->setUniform("u_shadowmap", shadowmapAtlas->depth_texture, 8);
+	shader->setUniform("u_shadowmap_dimensions", getSMapdDimensions(numShadowmaps));
 
 	shader->setUniform("u_use_shadowmaps", gui_use_shadowmaps);
 
@@ -567,6 +564,7 @@ void SCN::Renderer::lightToShaderSP(GFX::Shader* shader) {
 	int lights_cast_shadows[MAX_LIGHTS_SP];
 	mat4 shadow_viewprojections[MAX_LIGHTS_SP];
 	float shadow_biases[MAX_LIGHTS_SP];
+	int shadowmap_indexes[MAX_LIGHTS_SP];
 	int num_lights = lights.size();
 	for (int i = 0; i < num_lights; i++) {
 		light_positions[i] = lights[i]->root.model.getTranslation();
@@ -579,7 +577,7 @@ void SCN::Renderer::lightToShaderSP(GFX::Shader* shader) {
 		lights_cast_shadows[i] = (int)lights[i]->cast_shadows;
 		shadow_viewprojections[i] = lights[i]->shadowmap_viewprojection;
 		shadow_biases[i] = lights[i]->shadow_bias;
-
+		shadowmap_indexes[i] = lights[i]->shadowmap_index;
 	}
 	shader->setUniform("u_num_lights", num_lights);
 	shader->setUniform3Array("u_light_pos", (float*)&light_positions, MAX_LIGHTS_SP);
@@ -591,6 +589,7 @@ void SCN::Renderer::lightToShaderSP(GFX::Shader* shader) {
 	shader->setUniform1Array("u_light_cast_shadows", (int*)&lights_cast_shadows, MAX_LIGHTS_SP);
 	shader->setMatrix44Array("u_shadow_viewproj", (Matrix44*)&shadow_viewprojections, MAX_LIGHTS_SP);
 	shader->setUniform1Array("u_shadow_bias", (float*)&shadow_biases, MAX_LIGHTS_SP);
+	shader->setUniform1Array("u_shadowmap_index", (int*)&shadowmap_indexes, MAX_LIGHTS_SP);
 }
 
 void SCN::Renderer::lightToShaderMP(LightEntity* light, GFX::Shader* shader) {
@@ -631,8 +630,6 @@ void Renderer::showUI()
 	ImGui::Checkbox("use specular", &gui_use_specular);
 	ImGui::Checkbox("use shadowmaps", &gui_use_shadowmaps);
 	ImGui::Checkbox("better shadowmaps", &gui_better_shadowmaps);
-
-
 
 	//add here your stuff
 	//...

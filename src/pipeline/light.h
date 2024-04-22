@@ -28,6 +28,7 @@ namespace SCN {
 		float area; //for direct;
 
 		mat4 shadowmap_viewprojection;
+		int shadowmap_index;
 
 		ENTITY_METHODS(LightEntity, LIGHT, 14,4);
 

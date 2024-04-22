@@ -159,6 +159,8 @@ uniform int u_light_cast_shadows[MAX_LIGHTS];
 uniform sampler2D u_shadowmap;
 uniform mat4 u_shadow_viewproj[MAX_LIGHTS];
 uniform float u_shadow_bias[MAX_LIGHTS];
+uniform int u_shadowmap_index[MAX_LIGHTS];
+uniform int u_shadowmap_dimensions;
 
 out vec4 FragColor;
 
@@ -196,7 +198,7 @@ float computeShadow(vec3 wp, int i){
 	vec4 proj_pos = u_shadow_viewproj[i] * vec4(wp,1.0);
 
 	//from homogeneus space to clip space
-	vec2 shadow_uv = proj_pos.xy / proj_pos.w;
+	vec2 shadow_uv = (proj_pos.xy / proj_pos.w);
 
 	//from clip space to uv space
 	shadow_uv = shadow_uv * 0.5 + vec2(0.5);
@@ -208,7 +210,8 @@ float computeShadow(vec3 wp, int i){
 	real_depth = real_depth * 0.5 + 0.5;
 
 	//read depth from depth buffer in [0..+1] non-linear
-	float shadow_depth = texture( u_shadowmap, shadow_uv).x;
+	//float shadow_depth = texture( u_shadowmap, shadow_uv).x;
+	float shadow_depth = texture( u_shadowmap, vec2(shadow_uv.x*(1.0/u_shadowmap_dimensions)+(1.0/u_shadowmap_dimensions)*(u_shadowmap_index[i]%u_shadowmap_dimensions),	 shadow_uv.y*(1.0/u_shadowmap_dimensions)+(1.0/u_shadowmap_dimensions)*floor(u_shadowmap_index[i]/u_shadowmap_dimensions))).x;
 
 	//compute final shadow factor by comparing
 	float shadow_factor = 1.0;
