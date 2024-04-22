@@ -5,7 +5,7 @@
 // - Read FAQ at http://dearimgui.org/faq
 // - Newcomers, read 'Programmer guide' in imgui.cpp for notes on how to setup Dear ImGui in your codebase.
 // - Call and read ImGui::ShowDemoWindow() in imgui_demo.cpp. All applications in examples/ are doing that.
-// Read imgui.cpp for details, links and comments.
+// Read imgui.cpp for details, links and comment s.
 
 // Resources:
 // - FAQ                   http://dearimgui.org/faq
@@ -14,7 +14,7 @@
 // - Gallery               https://github.com/ocornut/imgui/issues/5886 (please post your screenshots/video there!)
 // - Wiki                  https://github.com/ocornut/imgui/wiki (lots of good stuff there)
 // - Glossary              https://github.com/ocornut/imgui/wiki/Glossary
-// - Issues & support      https://github.com/ocornut/imgui/issues
+// - Issues & support      https://github.com/ocornut/imgui/issues 
 
 // Getting Started?
 // - For first-time users having issues compiling/linking/running or issues loading fonts:

@@ -27,15 +27,15 @@ namespace SCN {
 	public:
 		bool render_wireframe;
 		bool render_boundaries;
-		bool use_multipass;
-		bool render_lights;
-		bool disable_lights;
+		bool use_multipass = false;
+		bool render_lights = true;
+		bool disable_lights= false;
 		bool gui_use_normalmaps = true;
 		bool gui_use_emissive = true;
 		bool gui_use_occlusion = true;
 		bool gui_use_specular = true;
 		bool gui_use_shadowmaps = true;
-		bool gui_better_shadowmaps = false;
+		int gui_shadowmap_res = 1024;
 
 		GFX::Texture* skybox_cubemap;
 
@@ -76,7 +76,7 @@ namespace SCN {
 
 		void showUI();
 
-		void generateShadowmaps();
+		void generateShadowmaps(Camera* main_camera);
 
 		void cameraToShader(Camera* camera, GFX::Shader* shader); //sends camera uniforms to shader
 		void lightToShaderSP(GFX::Shader* shader); //send light uniforms to shader for single-pass rendering

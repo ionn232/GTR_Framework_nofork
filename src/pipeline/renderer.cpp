@@ -44,9 +44,6 @@ Renderer::Renderer(const char* shader_atlas_filename)
 	render_boundaries = false;
 	scene = nullptr;
 	skybox_cubemap = nullptr;
-	use_multipass = false;
-	render_lights = true;
-	disable_lights = false;
 	shadowmapAtlas = nullptr;
 
 	if (!GFX::Shader::LoadAtlas(shader_atlas_filename))
@@ -75,13 +72,10 @@ void Renderer::setupScene()
 int getSMapdDimensions(int numlights) {
 	return(ceil(sqrt((float)numlights)));
 }
-float getConeAngle(float min, float max) {
-	return 0;
-}
 
-void Renderer::generateShadowmaps() {
+void Renderer::generateShadowmaps(Camera* main_camera) {
 	//IDEA: move directional lights to 'player' relative distance to better fit shadowmaps
-	int shadowmap_size = gui_better_shadowmaps ? 2048 : 1024; //TODO: customizar tamaño en variable
+	int shadowmap_size = gui_shadowmap_res;
 	int atlas_dimensions = getSMapdDimensions(numShadowmaps);
 	int shadowatlas_size = atlas_dimensions * shadowmap_size;
 	if (shadowmapAtlas == nullptr || prevAtlasSize != shadowatlas_size) {
@@ -89,7 +83,6 @@ void Renderer::generateShadowmaps() {
 		shadowmapAtlas = new GFX::FBO();
 		shadowmapAtlas->setDepthOnly(shadowatlas_size, shadowatlas_size);
 	}
-
 	shadowmapAtlas->bind();
 	Camera camera;
 	int light_index_i = 0;
@@ -98,19 +91,26 @@ void Renderer::generateShadowmaps() {
 	for (LightEntity* currentLight : lights) {
 		if (currentLight->cast_shadows) {
 			glViewport((light_index_i * shadowmap_size), (light_index_j * shadowmap_size), shadowmap_size, shadowmap_size);
-			//glScissor((light_index_i * shadowmap_size), (light_index_j * shadowmap_size), shadowmap_size, shadowmap_size);
-			//glEnable(GL_SCISSOR_TEST);
-			//glClear(GL_DEPTH_TEST);
-
-			if (currentLight->light_type == eLightType::DIRECTIONAL) {
+			vec3 position = currentLight->root.model.getTranslation();
+			if (currentLight->light_type == eLightType::DIRECTIONAL) { //IDEA: re-do main light system (there is just one directional light anyways)
+				//set camera
 				camera.setOrthographic(currentLight->area * -0.5, currentLight->area * 0.5, currentLight->area * -0.5, currentLight->area * 0.5, currentLight->near_distance, currentLight->max_distance);
+				//move with player
+				position = main_camera->eye;
 			}
 			else if (currentLight->light_type == eLightType::SPOT) {
-				camera.setPerspective(currentLight->cone_info.y * 1.5f, 1.0f, currentLight->near_distance, currentLight->max_distance); //*1.5 to account for the difference in the cone being circular and the camera squared (get the cone inside the camera rather than having the camera inside the cone) //hack is non-functional for spotlights with lower angles
+				//set camera PREGUNTAR
+				camera.setPerspective(currentLight->cone_info.y * 2.0f, 1.0f, currentLight->near_distance, currentLight->max_distance); 
 			}
-			vec3 position = currentLight->root.model.getTranslation();
 			camera.lookAt(position, position + currentLight->root.model.frontVector().normalize() * -1.0f, vec3(0, 1, 0));
 			camera.enable();
+
+			//smooth directional position
+			float grid = currentLight->area / (float)shadowmap_size;
+			camera.view_matrix.M[3][0] = round(camera.view_matrix.M[3][0] / grid) * grid;
+			camera.view_matrix.M[3][1] = round(camera.view_matrix.M[3][1] / grid) * grid;
+			camera.view_matrix.M[3][2] = round(camera.view_matrix.M[3][2] / grid) * grid;
+			camera.viewprojection_matrix = camera.view_matrix * camera.projection_matrix;
 
 			//render all opaque nodes
 			for (Node* currentObj : opaque_objects) {
@@ -127,8 +127,6 @@ void Renderer::generateShadowmaps() {
 			if (light_index_i >= atlas_dimensions) { light_index_i = 0; light_index_j += 1; }
 		}
 	}
-	//glEnable(GL_DEPTH_TEST);
-	//glClear(GL_SCISSOR_TEST);
 	shadowmapAtlas->unbind();
 	prevAtlasSize = shadowatlas_size;
 }
@@ -226,7 +224,6 @@ void Renderer::renderScene(SCN::Scene* scene, Camera* camera)
 				categorizeNodes(&pent->root, camera);
 		}
 		else if (ent->getType() == eEntityType::LIGHT && !disable_lights) { //light objects
-			//IDEA: test spheres to bounding boxes and cull invisible lights
 			//downcast to EntityLight and store in light array if it affects objects in the scene
 			LightEntity* light = (SCN::LightEntity*)ent; 
 			if (light->light_type == eLightType::DIRECTIONAL || camera->testSphereInFrustum(light->root.model.getTranslation(), light->max_distance) == CLIP_INSIDE) { //simple frustum culling (for point and spotlight)
@@ -238,7 +235,7 @@ void Renderer::renderScene(SCN::Scene* scene, Camera* camera)
 			}
 		}
 	}
-	generateShadowmaps(); //uses light container
+	generateShadowmaps(camera); //uses light container
 	camera->enable(); //reactivate scene camera
 	//pass 2: render entities
 	for (int i = 0; i < opaque_objects.size(); i++)
@@ -599,6 +596,10 @@ void SCN::Renderer::lightToShaderMP(LightEntity* light, GFX::Shader* shader) {
 	Vector2f cone_info = Vector2f(cos(light->cone_info.x * (PI / 180.0)), cos(light->cone_info.y * (PI / 180.0))); //convert angle to cosinus
 	float max_distance = light->max_distance;
 	int light_type = (int)light->light_type;
+	int light_cast_shadows = light->cast_shadows;
+	Matrix44 shadow_viewprojection = light->shadowmap_viewprojection;
+	float shadow_bias = light->shadow_bias;
+	int shadowmap_index = light->shadowmap_index;
 
 	shader->setUniform("u_light_pos", light_position);
 	shader->setUniform("u_light_front", light_front);
@@ -606,6 +607,10 @@ void SCN::Renderer::lightToShaderMP(LightEntity* light, GFX::Shader* shader) {
 	shader->setUniform("u_cone_info", cone_info);
 	shader->setUniform("u_max_distance", max_distance);
 	shader->setUniform("u_light_type", light_type);
+	shader->setUniform("u_light_cast_shadows", light_cast_shadows);
+	shader->setUniform("u_shadow_viewproj", shadow_viewprojection);
+	shader->setUniform("u_shadow_bias", shadow_bias);
+	shader->setUniform("u_shadowmap_index", shadowmap_index);
 }
 
 void SCN::Renderer::baseRenderMP(GFX::Mesh* mesh, GFX::Shader* shader) {
@@ -622,14 +627,17 @@ void Renderer::showUI()
 	ImGui::Checkbox("Wireframe", &render_wireframe);
 	ImGui::Checkbox("Boundaries", &render_boundaries);
 	ImGui::Checkbox("Render with lights", &render_lights);
-	ImGui::Checkbox("Disable lights", &disable_lights);
-	ImGui::Checkbox("Multipass lights", &use_multipass);
-	ImGui::Checkbox("use normalmaps", &gui_use_normalmaps);
-	ImGui::Checkbox("use emissive", &gui_use_emissive);
-	ImGui::Checkbox("use occlusion", &gui_use_occlusion);
-	ImGui::Checkbox("use specular", &gui_use_specular);
-	ImGui::Checkbox("use shadowmaps", &gui_use_shadowmaps);
-	ImGui::Checkbox("better shadowmaps", &gui_better_shadowmaps);
+	if (ImGui::BeginCombo("Lab1", "Show options")) {
+		ImGui::Checkbox("Disable lights", &disable_lights);
+		ImGui::Checkbox("Multipass lights", &use_multipass);
+		ImGui::Checkbox("use normalmaps", &gui_use_normalmaps);
+		ImGui::Checkbox("use emissive", &gui_use_emissive);
+		ImGui::Checkbox("use occlusion", &gui_use_occlusion);
+		ImGui::Checkbox("use specular", &gui_use_specular);
+		ImGui::Checkbox("use shadowmaps", &gui_use_shadowmaps);
+		ImGui::SliderInt("10-5000", &gui_shadowmap_res, 10, 5000, "shadowmap resolution");
+		ImGui::EndCombo();
+	}
 
 	//add here your stuff
 	//...

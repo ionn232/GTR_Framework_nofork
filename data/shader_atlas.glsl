@@ -202,15 +202,23 @@ float computeShadow(vec3 wp, int i){
 
 	//from clip space to uv space
 	shadow_uv = shadow_uv * 0.5 + vec2(0.5);
+	//it is outside on the sides
+	if( shadow_uv.x < 0.0 || shadow_uv.x > 1.0 || shadow_uv.y < 0.0 || shadow_uv.y > 1.0 ) {
+		return 1.0;
+	}
 
 	//get point depth [-1 .. +1] in non-linear space
 	float real_depth = (proj_pos.z - u_shadow_bias[i]) / proj_pos.w;
 
 	//normalize from [-1..+1] to [0..+1] still non-linear
 	real_depth = real_depth * 0.5 + 0.5;
+	//it is before near or behind far plane
+	if(real_depth < 0.0 || real_depth > 1.0) {
+		return 1.0;
+	}
 
 	//read depth from depth buffer in [0..+1] non-linear
-	//float shadow_depth = texture( u_shadowmap, shadow_uv).x;
+	//accounts for offset using shadowmap dimensions and id
 	float shadow_depth = texture( u_shadowmap, vec2(shadow_uv.x*(1.0/u_shadowmap_dimensions)+(1.0/u_shadowmap_dimensions)*(u_shadowmap_index[i]%u_shadowmap_dimensions),	 shadow_uv.y*(1.0/u_shadowmap_dimensions)+(1.0/u_shadowmap_dimensions)*floor(u_shadowmap_index[i]/u_shadowmap_dimensions))).x;
 
 	//compute final shadow factor by comparing
@@ -252,9 +260,6 @@ void main()
 	}
 
 	vec3 emissive_pixel = texture( u_emissive, v_uv ).xyz;
-	if (u_use_emissive == 1) {
-		light += emissive_pixel * u_emissive_factor;
-	}
 
 	float spec_ks = texture( u_metal_roughness, v_uv).g;
 	float spec_a =  texture( u_metal_roughness, v_uv).b;
@@ -354,6 +359,7 @@ void main()
 		}
 	}
 	FragColor.xyz = color.xyz * light;
+	if (u_use_emissive == 1) {FragColor.xyz += emissive_pixel * u_emissive_factor;}
 	FragColor.a = color.a;
 }
 

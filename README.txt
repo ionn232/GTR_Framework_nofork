@@ -21,16 +21,13 @@ specular light (using blinn-phong model as suggested)
 single pass
 multi pass (some inconsistencies in directional lights)
 frustum culling 
-further optimization (TODO, test if sphere overlaps with bounding boxes and camera BoundingBoxSphereOverlap no implementado asi testear)
 
 - Shadows:
 Spotlight
 Directional light
 Shadow atlas
 Single pass + multi pass
-shadowmap resizing
-optimizations: direccional se mueve, interpolacion lineal, multi-pass (TO-DO)
-
+other: shadowmap (+atlas) resizing, directional light follows camera
 
 (new) Render options:
 Added a toggle for each of the lab's tasks for debugging and building the report.
@@ -39,7 +36,7 @@ Activate lab 1 implementation.
 - Disable lights
 Ignore light entities. (for debug purposes)
 - Multipass lights		
-Render lights using single pass or multi pass implementation.
+Render lights using single pass (unchecked) or multi pass (checked) implementation.
 - Enable normals
 Account for normalmaps when rendering
 - Enable occlusion
@@ -50,3 +47,5 @@ Accouns for emissive materials when rendering
 Accounts for specular lighting when rendering
 - Enable shadowmaps
 Directional and spot lights cast shadows
+- Shadowmap resolution
+Set the exact shadowmap resolution (10-5000, initially 1024)
