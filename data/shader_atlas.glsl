@@ -410,6 +410,14 @@ uniform int u_light_type;
 
 uniform int u_num_lights;
 
+uniform int u_use_shadowmaps;
+uniform int u_light_cast_shadows;
+uniform sampler2D u_shadowmap;
+uniform mat4 u_shadow_viewproj;
+uniform float u_shadow_bias;
+uniform int u_shadowmap_index;
+uniform int u_shadowmap_dimensions;
+
 out vec4 FragColor;
 
 mat3 cotangent_frame(vec3 N, vec3 p, vec2 uv)
@@ -441,6 +449,44 @@ vec3 perturbNormal(vec3 N, vec3 WP, vec2 uv, vec3 normal_pixel)
 	return normalize(TBN * normal_pixel);
 }
 
+float computeShadow(vec3 wp){
+	//project our 3D position to the shadowmap
+	vec4 proj_pos = u_shadow_viewproj * vec4(wp,1.0);
+
+	//from homogeneus space to clip space
+	vec2 shadow_uv = (proj_pos.xy / proj_pos.w);
+
+	//from clip space to uv space
+	shadow_uv = shadow_uv * 0.5 + vec2(0.5);
+	//it is outside on the sides
+	if( shadow_uv.x < 0.0 || shadow_uv.x > 1.0 || shadow_uv.y < 0.0 || shadow_uv.y > 1.0 ) {
+		return 1.0;
+	}
+
+	//get point depth [-1 .. +1] in non-linear space
+	float real_depth = (proj_pos.z - u_shadow_bias) / proj_pos.w;
+
+	//normalize from [-1..+1] to [0..+1] still non-linear
+	real_depth = real_depth * 0.5 + 0.5;
+	//it is before near or behind far plane
+	if(real_depth < 0.0 || real_depth > 1.0) {
+		return 1.0;
+	}
+
+	//read depth from depth buffer in [0..+1] non-linear
+	//accounts for offset using shadowmap dimensions and id
+	float shadow_depth = texture( u_shadowmap, vec2(shadow_uv.x*(1.0/u_shadowmap_dimensions)+(1.0/u_shadowmap_dimensions)*(u_shadowmap_index%u_shadowmap_dimensions),	 shadow_uv.y*(1.0/u_shadowmap_dimensions)+(1.0/u_shadowmap_dimensions)*floor(u_shadowmap_index/u_shadowmap_dimensions))).x;
+
+	//compute final shadow factor by comparing
+	float shadow_factor = 1.0;
+
+	//we can compare them, even if they are not linear
+	if( shadow_depth < real_depth ) {
+		shadow_factor = 0.0;
+	}
+	return shadow_factor;
+}
+
 void main()
 {
 	vec2 uv = v_uv;
@@ -460,6 +506,8 @@ void main()
 	}
 	float spec_ks = texture( u_metal_roughness, v_uv).g;
 	float spec_a =  texture( u_metal_roughness, v_uv).b;
+
+	vec3 emissive_pixel = texture( u_emissive, v_uv ).xyz;
 
 	if (u_light_type == 1) { 		//point lights
 		//diffuse value
@@ -502,7 +550,13 @@ void main()
 			NdotL *= (cos_angle - u_cone_info.y) / (u_cone_info.x - u_cone_info.y);
 		}
 
-		light += (NdotL * u_light_col) * att_factor;
+		//shadow value
+		float shadow_factor = 1.0;
+		if (u_light_cast_shadows == 1 && u_use_shadowmaps == 1) {
+			shadow_factor = computeShadow(v_world_position);
+		}
+
+		light += (NdotL * u_light_col) * att_factor * shadow_factor;
 
 		//specular value (blinn-phong)
 		if (u_use_specular == 1 && NdotL > 0.0) {
@@ -528,7 +582,13 @@ void main()
 		L = normalize(L);
 		float NdotL = clamp(dot(N, L), 0.0, 1.0);
 
-		light += NdotL * u_light_col;
+		//shadow value
+		float shadow_factor = 1.0;
+		if (u_light_cast_shadows == 1 && u_use_shadowmaps == 1) {
+			shadow_factor = computeShadow(v_world_position);
+		}
+
+		light += NdotL * u_light_col * shadow_factor;
 
 		//specular value (blinn-phong)
 		if (u_use_specular == 1 && NdotL > 0.0) {
@@ -547,13 +607,9 @@ void main()
 		else{
 			light += u_ambient_light;
 		}
-		
-		vec3 emissive_pixel = texture( u_emissive, v_uv ).xyz;
-		if (u_use_emissive == 1) {
-			light += emissive_pixel * u_emissive_factor;
-		}
 	}
 	FragColor.xyz = color.xyz * light;
+	if (u_light_type == 4 && u_use_emissive == 1) {FragColor.xyz += emissive_pixel * u_emissive_factor;}
 	FragColor.a = color.a;
 }
 
