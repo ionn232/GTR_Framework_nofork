@@ -4,7 +4,7 @@
 
 #include "light.h"
 
-#define MAX_LIGHTS_SP 10
+#define MAX_LIGHTS_SP 15
 
 //forward declarations
 class Camera;
@@ -14,6 +14,21 @@ namespace GFX {
 	class Mesh;
 	class FBO;
 }
+
+enum eRenderTypes {
+	FLAT,
+	FORWARD,
+	DEFERRED
+};
+
+enum eDeferredDisplay {
+	DEFAULT,
+	COLOR,
+	NORMALS,
+	MATERIAL_PROPERTIES,
+	DEPTH, //IDEA: traducir de logaritmico a lineal, adaptar shader depth.fs
+	COUNT
+};
 
 namespace SCN {
 
@@ -27,8 +42,7 @@ namespace SCN {
 	public:
 		bool render_wireframe;
 		bool render_boundaries;
-		bool use_multipass = false;
-		bool render_lights = true;
+		bool use_multipass = true;
 		bool disable_lights= false;
 		bool gui_use_normalmaps = true;
 		bool gui_use_emissive = true;
@@ -36,12 +50,17 @@ namespace SCN {
 		bool gui_use_specular = true;
 		bool gui_use_shadowmaps = true;
 		int gui_shadowmap_res = 1024;
+		eRenderTypes render_mode = eRenderTypes::DEFERRED;
+		eDeferredDisplay deferred_display = eDeferredDisplay::DEFAULT;
 
 		GFX::Texture* skybox_cubemap;
 
 		GFX::FBO* shadowmapAtlas;
 		int prevAtlasSize = 0;
 		int numShadowmaps; //to avoid building an unnecesarily large atlas
+
+		GFX::FBO* gBuffersFBO;
+		vec2 prevScreenSize = vec2(0.0, 0.0); //to detect if gbuffers must be rebuilt
 
 		SCN::Scene* scene;
 
@@ -51,11 +70,15 @@ namespace SCN {
 		//just to be sure we have everything ready for the rendering
 		void setupScene();
 
+		void categorizeNodes(Camera* camera);
+
 		//add here your functions
 		//...
 
 		//renders several elements of the scene
 		void renderScene(SCN::Scene* scene, Camera* camera);
+		void renderSceneForward(SCN::Scene* scene, Camera* camera);
+		void renderSceneDeferred(SCN::Scene* scene, Camera* camera);
 
 		//render the skybox
 		void renderSkybox(GFX::Texture* cubemap);
@@ -71,6 +94,8 @@ namespace SCN {
 
 		//lab1
 		void renderMeshWithMaterialLights(const Matrix44 model, GFX::Mesh* mesh, SCN::Material* material);
+
+		void renderMeshWithMaterialGBuffers(const Matrix44 model, GFX::Mesh* mesh, SCN::Material* material);
 
 		void renderShadowmap(const Matrix44 model, GFX::Mesh* mesh, SCN::Material* material);
 

@@ -3,6 +3,8 @@ flat basic.vs flat.fs
 texture basic.vs texture.fs
 lightSP basic.vs lightSP.fs
 lightMP basic.vs lightMP.fs
+gbuffers basic.vs gbuffers.fs
+deferred_global deferred.vs deferred_global.fs
 skybox basic.vs skybox.fs
 depth quad.vs depth.fs
 multi basic.vs multi.fs
@@ -63,6 +65,35 @@ void main()
 	gl_Position = vec4( a_vertex, 1.0 );
 }
 
+\deferred.vs
+
+#version 330 core
+
+
+uniform int u_is_quad;
+uniform mat4 u_model;
+uniform mat4 u_viewprojection;
+
+in vec3 a_vertex;
+in vec2 a_coord;
+out vec2 v_uv;
+
+void main()
+{	
+	if (u_is_quad == 1) {
+		v_uv = a_coord;
+		gl_Position = vec4( a_vertex, 1.0 );
+	}
+	else{
+
+		//calcule the vertex in object space
+		vec3 position = a_vertex;
+		vec3 world_position = (u_model * vec4( position, 1.0) ).xyz;
+
+		//calcule the position of the vertex using the matrices
+		gl_Position = u_viewprojection * vec4( world_position, 1.0 );
+	}
+}
 
 \flat.fs
 
@@ -111,7 +142,7 @@ void main()
 
 #version 330 core
 
-const int MAX_LIGHTS = 10;
+const int MAX_LIGHTS = 15;
 in vec3 v_position;
 in vec3 v_world_position;
 in vec3 v_normal;
@@ -406,9 +437,8 @@ uniform int u_light_type;
 		//NO_LIGHT = 0,
 		//POINT = 1,
 		//SPOT = 2,
-		//DIRECTIONAL = 3
-
-uniform int u_num_lights;
+		//DIRECTIONAL = 3,
+		//AMBIENT = 4
 
 uniform int u_use_shadowmaps;
 uniform int u_light_cast_shadows;
@@ -613,6 +643,281 @@ void main()
 	FragColor.a = color.a;
 }
 
+\gbuffers.fs
+
+#version 330 core
+
+in vec3 v_position;
+in vec3 v_world_position;
+in vec3 v_normal;
+in vec2 v_uv;
+
+uniform vec4 u_color;
+uniform sampler2D u_texture;
+uniform float u_time;
+uniform float u_alpha_cutoff;
+
+uniform sampler2D u_metal_roughness;
+uniform sampler2D u_normalmap;
+uniform sampler2D u_emissive_texture;
+
+uniform vec3 u_emissive_factor;
+
+layout(location = 0) out vec4 FragColor;
+layout(location = 1) out vec4 NormalColor;
+layout(location = 2) out vec4 MaterialProperties;
+
+mat3 cotangent_frame(vec3 N, vec3 p, vec2 uv)
+{
+	// get edge vectors of the pixel triangle
+	vec3 dp1 = dFdx( p );
+	vec3 dp2 = dFdy( p );
+	vec2 duv1 = dFdx( uv );
+	vec2 duv2 = dFdy( uv );
+	
+	// solve the linear system
+	vec3 dp2perp = cross( dp2, N );
+	vec3 dp1perp = cross( N, dp1 );
+	vec3 T = dp2perp * duv1.x + dp1perp * duv2.x;
+	vec3 B = dp2perp * duv1.y + dp1perp * duv2.y;
+ 
+	// construct a scale-invariant frame 
+	float invmax = inversesqrt( max( dot(T,T), dot(B,B) ) );
+	return mat3( T * invmax, B * invmax, N );
+}
+
+// assume N, the interpolated vertex normal and 
+// WP the world position
+//vec3 normal_pixel = texture2D( normalmap, uv ).xyz; 
+vec3 perturbNormal(vec3 N, vec3 WP, vec2 uv, vec3 normal_pixel)
+{
+	normal_pixel = normal_pixel * 255./127. - 128./127.;
+	mat3 TBN = cotangent_frame(N, WP, uv);
+	return normalize(TBN * normal_pixel);
+}
+
+void main()
+{
+	vec2 uv = v_uv;
+	vec4 color = u_color;
+	color *= texture( u_texture, uv );
+	vec4 material_properties = texture(u_metal_roughness, uv);
+
+	if(color.a < u_alpha_cutoff)
+		discard;
+
+	vec3 emissive_pixel = texture( u_emissive_texture, v_uv ).xyz;
+
+	vec3 N = normalize(v_normal);
+	vec3 normal_pixel = texture( u_normalmap, v_uv ).xyz;
+	N = perturbNormal(N,v_world_position, v_uv , normal_pixel);
+
+	FragColor = color;
+
+	NormalColor = vec4(N * 0.5 + vec3(0.5), 1.0);
+	MaterialProperties = material_properties;
+}
+
+\deferred_global.fs
+
+#version 330 core
+
+in vec3 v_position;
+in vec2 v_uv;
+
+uniform sampler2D u_color_texture;
+uniform sampler2D u_normal_texture;
+uniform sampler2D u_mat_properties_texture;
+uniform sampler2D u_depth_texture;
+
+uniform vec2 u_invRes;
+uniform mat4 u_inverse_viewprojection;
+
+uniform vec3 u_ambient_light;
+
+uniform vec3 u_camera_position;
+
+uniform float u_metal_factor;
+uniform float u_rough_factor;
+
+uniform vec3 u_light_pos;
+uniform vec3 u_light_front;
+uniform vec3 u_light_col;
+uniform vec2 u_cone_info;
+uniform float u_max_distance;
+uniform int u_light_type;
+		//NO_LIGHT = 0,
+		//POINT = 1,
+		//SPOT = 2,
+		//DIRECTIONAL = 3
+		//AMBIENT = 4
+
+uniform int u_light_cast_shadows;
+uniform sampler2D u_shadowmap;
+uniform mat4 u_shadow_viewproj;
+uniform float u_shadow_bias;
+uniform int u_shadowmap_index;
+uniform int u_shadowmap_dimensions;
+
+out vec4 FragColor;
+
+float computeShadow(vec3 wp){
+	//project our 3D position to the shadowmap
+	vec4 proj_pos = u_shadow_viewproj * vec4(wp,1.0);
+
+	//from homogeneus space to clip space
+	vec2 shadow_uv = (proj_pos.xy / proj_pos.w);
+
+	//from clip space to uv space
+	shadow_uv = shadow_uv * 0.5 + vec2(0.5);
+	//it is outside on the sides
+	if( shadow_uv.x < 0.0 || shadow_uv.x > 1.0 || shadow_uv.y < 0.0 || shadow_uv.y > 1.0 ) {
+		return 1.0;
+	}
+
+	//get point depth [-1 .. +1] in non-linear space
+	float real_depth = (proj_pos.z - u_shadow_bias) / proj_pos.w;
+
+	//normalize from [-1..+1] to [0..+1] still non-linear
+	real_depth = real_depth * 0.5 + 0.5;
+	//it is before near or behind far plane
+	if(real_depth < 0.0 || real_depth > 1.0) {
+		return 1.0;
+	}
+
+	//read depth from depth buffer in [0..+1] non-linear
+	//accounts for offset using shadowmap dimensions and id
+	float shadow_depth = texture( u_shadowmap, vec2(shadow_uv.x*(1.0/u_shadowmap_dimensions)+(1.0/u_shadowmap_dimensions)*(u_shadowmap_index%u_shadowmap_dimensions),	 shadow_uv.y*(1.0/u_shadowmap_dimensions)+(1.0/u_shadowmap_dimensions)*floor(u_shadowmap_index/u_shadowmap_dimensions))).x;
+
+	//compute final shadow factor by comparing
+	float shadow_factor = 1.0;
+
+	//we can compare them, even if they are not linear
+	if( shadow_depth < real_depth ) {
+		shadow_factor = 0.0;
+	}
+	return shadow_factor;
+}
+
+void main()
+{
+	vec2 uv = gl_FragCoord.xy * u_invRes.xy;
+	vec3 light = vec3(0.0, 0.0, 0.0);
+	vec3 color = texture( u_color_texture, uv ).xyz;
+	float depth = texture(u_depth_texture, uv).x;
+	vec3 N = texture(u_normal_texture, uv).xyz * 2.0 - vec3(1.0);
+	N = normalize(N);
+	float spec_ks = texture( u_mat_properties_texture, uv).g;
+	float spec_a =  texture( u_mat_properties_texture, uv).b;
+
+	if(depth == 1.0)
+		discard;
+	
+	//reconstruct world position from depth and inv. viewproj
+	vec4 screen_pos = vec4(uv.x*2.0-1.0, uv.y*2.0-1.0, depth*2.0-1.0, 1.0);
+	vec4 proj_worldpos = u_inverse_viewprojection * screen_pos;
+	vec3 worldpos = proj_worldpos.xyz / proj_worldpos.w;
+
+	vec3 V = normalize(u_camera_position - worldpos);
+
+	if (u_light_type == 1) { 		//point lights
+		//diffuse value
+		vec3 L = u_light_pos - worldpos;
+		L= normalize(L);
+		float NdotL = clamp(dot(N, L), 0.0, 1.0);
+		
+		float lightDist = distance(u_light_pos, worldpos);
+		float att_factor = u_max_distance - lightDist;
+		att_factor = att_factor/u_max_distance;
+		att_factor = max(att_factor, 0.0);
+
+		light += (NdotL * u_light_col) * att_factor;
+
+		//specular value (blinn-phong)
+		if (NdotL > 0.0) {
+			vec3 H = normalize(L + V);
+			float NdotH = clamp(dot(N, H), 0.0, 1.0);
+			float final_a = 1-(spec_a * u_rough_factor);
+			float final_ks = spec_ks * u_metal_factor;
+			if (final_a != 0) {light += final_ks * pow(NdotH, final_a) * u_light_col * att_factor; }
+		}
+	}
+	else if (u_light_type == 2) { 		//spot lights
+		//diffuse value
+		vec3 L = u_light_pos - worldpos;
+		L= normalize(L);
+		float NdotL = clamp(dot(N, L), 0.0, 1.0);
+		
+		float lightDist = distance(u_light_pos, worldpos);
+		float att_factor = u_max_distance - lightDist;
+		att_factor = att_factor/u_max_distance;
+		att_factor = max(att_factor, 0.0);
+
+		float cos_angle = dot(u_light_front, L);
+		if (cos_angle < u_cone_info.y) {
+			NdotL = 0.0;
+		}
+		else if (cos_angle < u_cone_info.x) {
+			NdotL *= (cos_angle - u_cone_info.y) / (u_cone_info.x - u_cone_info.y);
+		}
+
+		//shadow value
+		float shadow_factor = 1.0;
+		if (u_light_cast_shadows == 1) {
+			shadow_factor = computeShadow(worldpos);
+		}
+
+		light += (NdotL * u_light_col) * att_factor * shadow_factor;
+
+		//specular value (blinn-phong)
+		if (NdotL > 0.0) {
+			vec3 H = normalize(L + V);
+			float NdotH = clamp(dot(N, H), 0.0, 1.0);
+			float final_a = 1-(spec_a * u_rough_factor);
+			float final_ks = spec_ks * u_metal_factor;
+
+			float cos_angle = dot(u_light_front, L);
+			if (cos_angle < u_cone_info.y) {
+				NdotH = 0;
+			}
+			else if (cos_angle < u_cone_info.x) {
+				NdotH *= (cos_angle - u_cone_info.y) / (u_cone_info.x - u_cone_info.y);
+			}
+
+			if (final_a != 0) {light += final_ks * pow(NdotH, final_a) * u_light_col * att_factor; }
+		}
+	}
+	else if (u_light_type == 3) {		//directional lights
+		//diffuse value
+		vec3 L = u_light_front;
+		L = normalize(L);
+		float NdotL = clamp(dot(N, L), 0.0, 1.0);
+
+		//shadow value
+		float shadow_factor = 1.0;
+		if (u_light_cast_shadows == 1) {
+			shadow_factor = computeShadow(worldpos);
+		}
+
+		light += NdotL * u_light_col * shadow_factor;
+
+		//specular value (blinn-phong)
+		if (NdotL > 0.0) {
+			vec3 H = normalize(L + V);
+			float NdotH = clamp(dot(N, H), 0.0, 1.0);
+			float final_a = 1-(spec_a * u_rough_factor);
+			float final_ks = spec_ks * u_metal_factor;
+			if (final_a != 0) {light += final_ks * pow(NdotH, final_a) * u_light_col; }
+		}
+	}
+	else if (u_light_type == 4) {		//ambient light
+		float occlusion = texture( u_mat_properties_texture, uv).r;
+		light += u_ambient_light * occlusion;
+	}
+	FragColor.xyz = color * light;
+	FragColor.a = 1.0;
+}
+
 \skybox.fs
 
 #version 330 core
@@ -629,6 +934,8 @@ void main()
 	vec3 E = v_world_position - u_camera_position;
 	vec4 color = texture( u_texture, E );
 	FragColor = color;
+
+
 }
 
 

@@ -67,14 +67,14 @@ void Application::render(void)
 	renderer->renderScene(scene, camera);
 	
 	//Draw the floor grid, helpful to have a reference point
-	if (render_debug)
-	{
-		GFX::drawGrid();
+	//if (render_debug)
+	//{
+	//	GFX::drawGrid();
 
-		//render debug points 
-		glDisable(GL_DEPTH_TEST);
-		GFX::drawPoints(debug_points, Vector4f(1, 1, 0, 1),4);
-	}
+	//	//render debug points 
+	//	glDisable(GL_DEPTH_TEST);
+	//	GFX::drawPoints(debug_points, Vector4f(1, 1, 0, 1),4);
+	//}
 
 	glDisable(GL_DEPTH_TEST);
 	//render anything in the gui after this
