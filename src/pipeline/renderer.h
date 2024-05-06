@@ -42,7 +42,7 @@ namespace SCN {
 	public:
 		bool render_wireframe;
 		bool render_boundaries;
-		bool use_multipass = true;
+		bool gui_use_multipass = false;
 		bool disable_lights= false;
 		bool gui_use_normalmaps = true;
 		bool gui_use_emissive = true;
@@ -77,6 +77,7 @@ namespace SCN {
 
 		//renders several elements of the scene
 		void renderScene(SCN::Scene* scene, Camera* camera);
+		void renderSceneFlat(SCN::Scene* scene, Camera* camera);
 		void renderSceneForward(SCN::Scene* scene, Camera* camera);
 		void renderSceneDeferred(SCN::Scene* scene, Camera* camera);
 
@@ -84,7 +85,7 @@ namespace SCN {
 		void renderSkybox(GFX::Texture* cubemap);
 	
 		//to render one node from the prefab and its children
-		void renderNode(SCN::Node* node, Camera* camera);
+		void renderNode(SCN::Node* node, Camera* camera, eRenderTypes render_type);
 
 		//sorts node and children nodes to their respective container
 		void categorizeNodes(SCN::Node* node, Camera* camera);
@@ -93,7 +94,7 @@ namespace SCN {
 		void renderMeshWithMaterial(const Matrix44 model, GFX::Mesh* mesh, SCN::Material* material);
 
 		//lab1
-		void renderMeshWithMaterialLights(const Matrix44 model, GFX::Mesh* mesh, SCN::Material* material);
+		void renderMeshWithMaterialLights(const Matrix44 model, GFX::Mesh* mesh, SCN::Material* material, bool use_multipass);
 
 		void renderMeshWithMaterialGBuffers(const Matrix44 model, GFX::Mesh* mesh, SCN::Material* material);
 

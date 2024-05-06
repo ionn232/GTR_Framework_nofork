@@ -69,7 +69,6 @@ void main()
 
 #version 330 core
 
-
 uniform int u_is_quad;
 uniform mat4 u_model;
 uniform mat4 u_viewprojection;
@@ -80,12 +79,14 @@ out vec2 v_uv;
 
 void main()
 {	
+
+	//draw light passes (directional and ambient)
 	if (u_is_quad == 1) {
 		v_uv = a_coord;
 		gl_Position = vec4( a_vertex, 1.0 );
 	}
+	//draw light passes (point and spot)
 	else{
-
 		//calcule the vertex in object space
 		vec3 position = a_vertex;
 		vec3 world_position = (u_model * vec4( position, 1.0) ).xyz;
@@ -659,7 +660,8 @@ uniform float u_alpha_cutoff;
 
 uniform sampler2D u_metal_roughness;
 uniform sampler2D u_normalmap;
-uniform sampler2D u_emissive_texture;
+uniform int u_use_normalmap; //avoids visual bugs when perturbing a normal when there is no normalmap
+uniform sampler2D u_emissive;
 
 uniform vec3 u_emissive_factor;
 
@@ -699,23 +701,28 @@ vec3 perturbNormal(vec3 N, vec3 WP, vec2 uv, vec3 normal_pixel)
 void main()
 {
 	vec2 uv = v_uv;
-	vec4 color = u_color;
-	color *= texture( u_texture, uv );
-	vec4 material_properties = texture(u_metal_roughness, uv);
+	vec4 color = u_color * texture( u_texture, uv );
+	vec3 colorTexture = color.xyz;
+	vec3 material_properties = texture(u_metal_roughness, uv).xyz;
 
 	if(color.a < u_alpha_cutoff)
 		discard;
 
-	vec3 emissive_pixel = texture( u_emissive_texture, v_uv ).xyz;
+	vec3 emissive_pixel = texture( u_emissive, uv ).xyz * u_emissive_factor;
 
 	vec3 N = normalize(v_normal);
-	vec3 normal_pixel = texture( u_normalmap, v_uv ).xyz;
-	N = perturbNormal(N,v_world_position, v_uv , normal_pixel);
+	vec3 normal_pixel = texture( u_normalmap, uv ).xyz;
 
-	FragColor = color;
+	if (u_use_normalmap == 1) {N = perturbNormal(N,v_world_position, uv , normal_pixel); }
 
-	NormalColor = vec4(N * 0.5 + vec3(0.5), 1.0);
-	MaterialProperties = material_properties;
+	FragColor.xyz = colorTexture;
+	FragColor.w = emissive_pixel.r;
+
+	NormalColor.xyz = N * 0.5 + vec3(0.5);
+	NormalColor.w = emissive_pixel.g;
+
+	MaterialProperties.xyz = material_properties;
+	MaterialProperties.w = emissive_pixel.b;
 }
 
 \deferred_global.fs
@@ -760,6 +767,8 @@ uniform int u_shadowmap_index;
 uniform int u_shadowmap_dimensions;
 
 out vec4 FragColor;
+
+
 
 float computeShadow(vec3 wp){
 	//project our 3D position to the shadowmap
@@ -812,7 +821,7 @@ void main()
 
 	if(depth == 1.0)
 		discard;
-	
+
 	//reconstruct world position from depth and inv. viewproj
 	vec4 screen_pos = vec4(uv.x*2.0-1.0, uv.y*2.0-1.0, depth*2.0-1.0, 1.0);
 	vec4 proj_worldpos = u_inverse_viewprojection * screen_pos;
@@ -914,8 +923,19 @@ void main()
 		float occlusion = texture( u_mat_properties_texture, uv).r;
 		light += u_ambient_light * occlusion;
 	}
+
 	FragColor.xyz = color * light;
+	
+	//emissive light on first draw
+	if (u_light_type == 4) {
+		//TODO: optimize to avoid multiple reads on same texture (save previous as vec4)
+		FragColor.r += texture(u_color_texture, uv).w;
+		FragColor.g += texture(u_normal_texture, uv).w;
+		FragColor.b += texture(u_mat_properties_texture, uv).w;
+	}
 	FragColor.a = 1.0;
+	//FragColor.xyz = vec3(1.0);
+	gl_FragDepth = depth;
 }
 
 \skybox.fs

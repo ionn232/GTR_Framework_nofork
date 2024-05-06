@@ -225,15 +225,46 @@ void Renderer::renderScene(SCN::Scene* scene, Camera* camera) {
 	this->scene = scene;
 	setupScene();
 	categorizeNodes(camera);
-	switch (render_mode) { //TODO fix this, checked twice here and in renderNode
+	std::sort(std::begin(semitransparent_objects), std::end(semitransparent_objects), compareDist);	//sort blending vector - sorts nodes by distance in descending order
+	switch (render_mode) {
 	case eRenderTypes::DEFERRED: //deferred rendering
 		renderSceneDeferred(scene, camera);
 		break;
 	//new cases here
-	default: //flat or forward rendering
+	
+	case eRenderTypes::FORWARD: //flat or forward rendering TODO flat not working since refactor, create renderSceneFlat or change RenderSceneForward
 		renderSceneForward(scene, camera);
+		break;
+	default:
+		renderSceneFlat(scene, camera);
 	}
+}
 
+void Renderer::renderSceneFlat(SCN::Scene* scene, Camera* camera) {
+	glDisable(GL_BLEND);
+	glEnable(GL_DEPTH_TEST);
+
+	//set the clear color (the background color)
+	glClearColor(scene->background_color.x, scene->background_color.y, scene->background_color.z, 1.0);
+
+	// Clear the color and the depth buffer
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+	GFX::checkGLErrors();
+
+	//render skybox
+	if (skybox_cubemap)
+		renderSkybox(skybox_cubemap);
+
+	//render entities
+	for (int i = 0; i < opaque_objects.size(); i++)
+	{
+		renderNode(opaque_objects[i], camera, eRenderTypes::FLAT);
+	}
+	//render semitransparent entities
+	for (int i = 0; i < semitransparent_objects.size(); i++)
+	{
+		renderNode(semitransparent_objects[i], camera, eRenderTypes::FLAT);
+	}
 }
 
 void Renderer::renderSceneForward(SCN::Scene* scene, Camera* camera)
@@ -257,19 +288,19 @@ void Renderer::renderSceneForward(SCN::Scene* scene, Camera* camera)
 	//render entities
 	for (int i = 0; i < opaque_objects.size(); i++)
 	{
-		renderNode(opaque_objects[i], camera);
+		renderNode(opaque_objects[i], camera, eRenderTypes::FORWARD);
 	}
 	//render semitransparent entities
-	std::sort(std::begin(semitransparent_objects), std::end(semitransparent_objects), compareDist);	//sort blending vector - sorts nodes by distance in descending order
 	for (int i = 0; i < semitransparent_objects.size(); i++)
 	{
-		renderNode(semitransparent_objects[i], camera);
+		renderNode(semitransparent_objects[i], camera, eRenderTypes::FORWARD);
 	}
 }
 
 void Renderer::renderSceneDeferred(SCN::Scene* scene, Camera* camera) {
 	glDisable(GL_BLEND);
 	glEnable(GL_DEPTH_TEST);
+	glDepthFunc(GL_LESS);
 
 	vec2 size = CORE::getWindowSize();
 	if (!gBuffersFBO || prevScreenSize.distance(size) > 0.0) {
@@ -287,10 +318,11 @@ void Renderer::renderSceneDeferred(SCN::Scene* scene, Camera* camera) {
 	//render entities (NOT SEMITRANSPARENT) //IDEA: implementar dithering //IDEA: forward en semitransparentes después de renderizar frame
 	for (int i = 0; i < opaque_objects.size(); i++)
 	{
-		renderNode(opaque_objects[i], camera);
+		renderNode(opaque_objects[i], camera, eRenderTypes::DEFERRED);
 	}
 
 	gBuffersFBO->unbind();
+
 	prevScreenSize = size; //update screen size
 
 	switch (deferred_display) { //if special display is selected, show respective buffer and abort further rendering
@@ -302,9 +334,9 @@ void Renderer::renderSceneDeferred(SCN::Scene* scene, Camera* camera) {
 		return;
 	case eDeferredDisplay::DEPTH: gBuffersFBO->depth_texture->toViewport();
 		return;
-	}
+	} //TODO emissive case
 
-	GFX::Mesh* quad = GFX::Mesh::getQuad();
+	GFX::Mesh* quad = GFX::Mesh::getQuad(); //create quad to draw to screen
 
 	//render skybox
 	if (skybox_cubemap)
@@ -314,8 +346,13 @@ void Renderer::renderSceneDeferred(SCN::Scene* scene, Camera* camera) {
 	generateShadowmaps(camera); //render shadowmap atlas
 	camera->enable(); //reactivate scene camera
 
+
 	GFX::Shader* deferred_global = GFX::Shader::Get("deferred_global");
 	deferred_global->enable();
+
+
+	//upload uniforms to draw emissive quad
+	deferred_global->setUniform("u_is_quad", 1);
 
 	//upload uniforms to shader
 	cameraToShader(camera, deferred_global);
@@ -330,23 +367,25 @@ void Renderer::renderSceneDeferred(SCN::Scene* scene, Camera* camera) {
 
 	deferred_global->setUniform("u_shadowmap", shadowmapAtlas->depth_texture, 8);
 	deferred_global->setUniform("u_shadowmap_dimensions", getSMapdDimensions(numShadowmaps));
+	//alredy set as is_quad for first drawcall
 
 	//TODO: METAL FACTOR AND ROUGH FACTOR DE CADA MATERIAL (pre-computar finals en gbuffer shader)
 	deferred_global->setUniform("u_metal_factor", 0.5f);
 	deferred_global->setUniform("u_rough_factor", 0.5f);
-	deferred_global->setUniform("u_is_quad", 1);
 
 	
 	GFX::Mesh light_sphere;
 	Matrix44 sphere_model;
 	Vector3f light_pos;
-	//set GL flags for rendering lights
+	//color + ambient + emissive render and save z-buffer data
+	glEnable(GL_DEPTH_TEST);
+	glDepthFunc(GL_ALWAYS);
 	baseRenderMP(quad, deferred_global);
-	glDepthFunc(GL_LEQUAL);
+
+	//set GL flags for rendering lights
 	glEnable(GL_BLEND);
-	glEnable(GL_CULL_FACE); //TODO if camera is inside sphere glFrontFace(GL_CW); and after GL_CCW
+	glEnable(GL_CULL_FACE);
 	glBlendFunc(GL_SRC_ALPHA, GL_ONE);
-	glDisable(GL_DEPTH_TEST);
 	//light pass
 	for (int i = 0; i < lights.size(); i++) {
 		//upload uniforms
@@ -375,9 +414,15 @@ void Renderer::renderSceneDeferred(SCN::Scene* scene, Camera* camera) {
 			quad->render(GL_TRIANGLES);
 		}
 	}
+	deferred_global->disable();
 	//reset relevant GL flags
 	glEnable(GL_DEPTH_TEST);
 	glDepthFunc(GL_LESS);
+	//render semitransparent objects using forward rendering
+	for (int i = 0; i < semitransparent_objects.size(); i++)
+	{
+		renderNode(semitransparent_objects[i], camera, eRenderTypes::FORWARD);
+	}
 }
 
 void Renderer::renderSkybox(GFX::Texture* cubemap)
@@ -408,7 +453,7 @@ void Renderer::renderSkybox(GFX::Texture* cubemap)
 }
 
 //renders a node
-void Renderer::renderNode(SCN::Node* node, Camera* camera)
+void Renderer::renderNode(SCN::Node* node, Camera* camera, eRenderTypes render_type)
 {
 	if (!node->visible)
 		return;
@@ -427,10 +472,10 @@ void Renderer::renderNode(SCN::Node* node, Camera* camera)
 		{
 			if(render_boundaries)
 				node->mesh->renderBounding(node_model, true);
-			switch (render_mode) {
+			switch (render_type) {
 				case eRenderTypes::FLAT: renderMeshWithMaterial(node_model, node->mesh, node->material);
 					break;
-				case eRenderTypes::FORWARD: renderMeshWithMaterialLights(node_model, node->mesh, node->material);
+				case eRenderTypes::FORWARD: renderMeshWithMaterialLights(node_model, node->mesh, node->material, render_mode == eRenderTypes::DEFERRED ? false : gui_use_multipass); //little hack to optimize deferred performance using single pass
 					break;
 				case eRenderTypes::DEFERRED: renderMeshWithMaterialGBuffers(node_model, node->mesh, node->material);
 					break;
@@ -536,7 +581,7 @@ void Renderer::renderMeshWithMaterial(const Matrix44 model, GFX::Mesh* mesh, SCN
 	glPolygonMode( GL_FRONT_AND_BACK, GL_FILL );
 }
 
-void Renderer::renderMeshWithMaterialLights(const Matrix44 model, GFX::Mesh* mesh, SCN::Material* material)
+void Renderer::renderMeshWithMaterialLights(const Matrix44 model, GFX::Mesh* mesh, SCN::Material* material, bool use_multipass)
 {
 	//in case there is nothing to do
 	if (!mesh || !mesh->getNumVertices() || !material)
@@ -603,7 +648,7 @@ void Renderer::renderMeshWithMaterialLights(const Matrix44 model, GFX::Mesh* mes
 	glEnable(GL_DEPTH_TEST);
 
 	//chose a shader
-	shader = use_multipass ? GFX::Shader::Get("lightMP") : GFX::Shader::Get("lightSP");
+	shader = use_multipass ? GFX::Shader::Get("lightMP") : GFX::Shader::Get("lightSP"); 
 
 	assert(glGetError() == GL_NO_ERROR);
 
@@ -692,6 +737,7 @@ void Renderer::renderMeshWithMaterialGBuffers(const Matrix44 model, GFX::Mesh* m
 
 	Camera* camera = Camera::current;
 
+	int useNormalmap = 1; //to avoid visual bugs when an object has no normalmap
 	texture = material->textures[SCN::eTextureChannel::ALBEDO].texture;
 	normalMap = material->textures[SCN::eTextureChannel::NORMALMAP].texture;
 	emissive = material->textures[SCN::eTextureChannel::EMISSIVE].texture;
@@ -701,6 +747,7 @@ void Renderer::renderMeshWithMaterialGBuffers(const Matrix44 model, GFX::Mesh* m
 	}
 	if (normalMap == NULL) {
 		normalMap = GFX::Texture::getWhiteTexture();
+		useNormalmap = 0;
 	}
 	if (emissive == NULL) {
 		emissive = GFX::Texture::getWhiteTexture();
@@ -754,6 +801,8 @@ void Renderer::renderMeshWithMaterialGBuffers(const Matrix44 model, GFX::Mesh* m
 	shader->setUniform("u_normalmap", normalMap, 1);
 	shader->setUniform("u_emissive", emissive, 2);
 	shader->setUniform("u_metal_roughness", metal_roughness, 3);
+
+	shader->setUniform("u_use_normalmap", useNormalmap);
 
 	//this is used to say which is the alpha threshold to what we should not paint a pixel on the screen (to cut polygons according to texture alpha)
 	shader->setUniform("u_alpha_cutoff", material->alpha_mode == SCN::eAlphaMode::MASK ? material->alpha_cutoff : 0.001f);
@@ -853,6 +902,8 @@ void Renderer::showUI()
 		
 	ImGui::Checkbox("Wireframe", &render_wireframe);
 	ImGui::Checkbox("Boundaries", &render_boundaries);
+	ImGui::Checkbox("Disable lights", &disable_lights);
+	ImGui::SliderInt("10-5000", &gui_shadowmap_res, 10, 5000, "shadowmap resolution");
 	if (render_mode == eRenderTypes::FLAT) {
 		if (ImGui::BeginCombo("Render mode", "Flat")) {
 			ImGui::RadioButton("Flat", (int*)&render_mode, (int)eRenderTypes::FLAT);
@@ -869,14 +920,12 @@ void Renderer::showUI()
 			ImGui::EndCombo();
 		}
 		if (ImGui::BeginCombo("Lab1", "Show options")) {
-			ImGui::Checkbox("Disable lights", &disable_lights);
-			ImGui::Checkbox("Multipass lights", &use_multipass);
+			ImGui::Checkbox("Multipass lights", &gui_use_multipass);
 			ImGui::Checkbox("use normalmaps", &gui_use_normalmaps);
 			ImGui::Checkbox("use emissive", &gui_use_emissive);
 			ImGui::Checkbox("use occlusion", &gui_use_occlusion);
 			ImGui::Checkbox("use specular", &gui_use_specular);
 			ImGui::Checkbox("use shadowmaps", &gui_use_shadowmaps);
-			ImGui::SliderInt("10-5000", &gui_shadowmap_res, 10, 5000, "shadowmap resolution");
 			ImGui::EndCombo();
 		}
 	}
