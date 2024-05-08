@@ -27,6 +27,7 @@ enum eDeferredDisplay {
 	NORMALS,
 	MATERIAL_PROPERTIES,
 	DEPTH, //IDEA: traducir de logaritmico a lineal, adaptar shader depth.fs
+	EMISSIVE,
 	COUNT
 };
 

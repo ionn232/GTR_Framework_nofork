@@ -5,6 +5,7 @@ lightSP basic.vs lightSP.fs
 lightMP basic.vs lightMP.fs
 gbuffers basic.vs gbuffers.fs
 deferred_global deferred.vs deferred_global.fs
+view_emissive quad.vs emissive.fs
 skybox basic.vs skybox.fs
 depth quad.vs depth.fs
 multi basic.vs multi.fs
@@ -93,6 +94,9 @@ void main()
 
 		//calcule the position of the vertex using the matrices
 		gl_Position = u_viewprojection * vec4( world_position, 1.0 );
+
+		//store the texture coordinates
+		v_uv = a_coord;
 	}
 }
 
@@ -768,8 +772,6 @@ uniform int u_shadowmap_dimensions;
 
 out vec4 FragColor;
 
-
-
 float computeShadow(vec3 wp){
 	//project our 3D position to the shadowmap
 	vec4 proj_pos = u_shadow_viewproj * vec4(wp,1.0);
@@ -934,8 +936,27 @@ void main()
 		FragColor.b += texture(u_mat_properties_texture, uv).w;
 	}
 	FragColor.a = 1.0;
-	//FragColor.xyz = vec3(1.0);
 	gl_FragDepth = depth;
+}
+
+
+\emissive.fs
+
+in vec3 v_position;
+in vec2 v_uv;
+
+uniform sampler2D u_color_texture;
+uniform sampler2D u_normal_texture;
+uniform sampler2D u_mat_properties_texture;
+
+out vec4 FragColor;
+
+void main() {
+	vec2 uv = v_uv;
+	FragColor.r = texture(u_color_texture, uv).w;
+	FragColor.g = texture(u_normal_texture, uv).w;
+	FragColor.b = texture(u_mat_properties_texture, uv).w;
+	FragColor.a = 1.0;
 }
 
 \skybox.fs

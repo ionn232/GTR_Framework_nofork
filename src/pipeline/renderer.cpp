@@ -324,6 +324,7 @@ void Renderer::renderSceneDeferred(SCN::Scene* scene, Camera* camera) {
 	gBuffersFBO->unbind();
 
 	prevScreenSize = size; //update screen size
+	GFX::Mesh* quad = GFX::Mesh::getQuad(); //create quad to draw to screen
 
 	switch (deferred_display) { //if special display is selected, show respective buffer and abort further rendering
 	case eDeferredDisplay::COLOR: gBuffersFBO->color_textures[0]->toViewport();
@@ -334,9 +335,16 @@ void Renderer::renderSceneDeferred(SCN::Scene* scene, Camera* camera) {
 		return;
 	case eDeferredDisplay::DEPTH: gBuffersFBO->depth_texture->toViewport();
 		return;
-	} //TODO emissive case
-
-	GFX::Mesh* quad = GFX::Mesh::getQuad(); //create quad to draw to screen
+	case eDeferredDisplay::EMISSIVE:
+		GFX::Shader* emissive = GFX::Shader::Get("view_emissive");
+		emissive->enable();
+		emissive->setUniform("u_color_texture", gBuffersFBO->color_textures[0], 0);
+		emissive->setUniform("u_normal_texture", gBuffersFBO->color_textures[1], 1);
+		emissive->setUniform("u_mat_properties_texture", gBuffersFBO->color_textures[2], 2);
+		quad->render(GL_TRIANGLES);
+		emissive->disable();
+		return;
+	}
 
 	//render skybox
 	if (skybox_cubemap)
@@ -367,16 +375,20 @@ void Renderer::renderSceneDeferred(SCN::Scene* scene, Camera* camera) {
 
 	deferred_global->setUniform("u_shadowmap", shadowmapAtlas->depth_texture, 8);
 	deferred_global->setUniform("u_shadowmap_dimensions", getSMapdDimensions(numShadowmaps));
-	//alredy set as is_quad for first drawcall
 
 	//TODO: METAL FACTOR AND ROUGH FACTOR DE CADA MATERIAL (pre-computar finals en gbuffer shader)
 	deferred_global->setUniform("u_metal_factor", 0.5f);
 	deferred_global->setUniform("u_rough_factor", 0.5f);
 
 	
+	//variables for lighting pass
 	GFX::Mesh light_sphere;
-	Matrix44 sphere_model;
 	Vector3f light_pos;
+	Matrix44 sphere_model;
+	float radius = 0.0f;
+
+	light_sphere.createSphere(1);
+
 	//color + ambient + emissive render and save z-buffer data
 	glEnable(GL_DEPTH_TEST);
 	glDepthFunc(GL_ALWAYS);
@@ -386,17 +398,26 @@ void Renderer::renderSceneDeferred(SCN::Scene* scene, Camera* camera) {
 	glEnable(GL_BLEND);
 	glEnable(GL_CULL_FACE);
 	glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+
 	//light pass
 	for (int i = 0; i < lights.size(); i++) {
 		//upload uniforms
 		lightToShaderMP(lights[i], deferred_global); //IDEA: trim unnecesary uniform uploads with a new, more specific function
 		//point and spotlight (rendering geometry + frustum culling)
 		if ((lights[i]->light_type == eLightType::POINT || lights[i]->light_type == eLightType::SPOT) && camera->testSphereInFrustum(lights[i]->root.model.getTranslation(), lights[i]->max_distance) == CLIP_INSIDE) {
-			//update sphere to current light
-			light_sphere.clear();
+			//update sphere to current light 
+			//hack: setscale and settranslation break the program - update matrix manually
+			sphere_model.setIdentity();
+			//translation
 			light_pos = lights[i]->root.model.getTranslation();
-			light_sphere.createSphere(lights[i]->max_distance);
-			sphere_model.setTranslation(light_pos.x, light_pos.y, light_pos.z);
+			sphere_model.m[12] = light_pos.x;
+			sphere_model.m[13] = light_pos.y;
+			sphere_model.m[14] = light_pos.z;
+			//scale
+			radius = lights[i]->max_distance;
+			sphere_model.m[0] = radius;
+			sphere_model.m[5] = radius;
+			sphere_model.m[10] = radius;
 			//check if camera is inside light sphere
 			if (camera->eye.distance(light_pos) < lights[i]->max_distance) {
 				glFrontFace(GL_CW);
@@ -936,7 +957,7 @@ void Renderer::showUI()
 			ImGui::RadioButton("Deferred", (int*)&render_mode, (int)eRenderTypes::DEFERRED);
 			ImGui::EndCombo();
 		}
-		ImGui::Combo("Display channel", (int*)&deferred_display, "DEFAULT\0COLOR\0NORMALS\0MATERIAL_PROPERTIES\0DEPTH\0");
+		ImGui::Combo("Display channel", (int*)&deferred_display, "DEFAULT\0COLOR\0NORMALS\0MATERIAL_PROPERTIES\0DEPTH\0EMISSIVE\0");
 	}
 }
 
