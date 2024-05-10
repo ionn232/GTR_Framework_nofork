@@ -22,13 +22,6 @@ using namespace SCN;
 //some globals
 GFX::Mesh sphere;
 
-//struct sRenderable {
-//	Material* material;
-//	GFX::Mesh* mesh;
-//	mat4 model;
-//	float distanceToCamera;
-//};
-
 std::vector<SCN::Node*> opaque_objects;
 std::vector<SCN::Node*> semitransparent_objects;
 std::vector<LightEntity*> lights;
@@ -46,7 +39,9 @@ Renderer::Renderer(const char* shader_atlas_filename)
 	skybox_cubemap = nullptr;
 	shadowmapAtlas = nullptr;
 	gBuffersFBO = nullptr;
+	ssao_fbo = nullptr;
 
+	ssao_positions = generateSpherePoints(64, 1, false);
 
 	if (!GFX::Shader::LoadAtlas(shader_atlas_filename))
 		exit(1);
@@ -310,12 +305,12 @@ void Renderer::renderSceneDeferred(SCN::Scene* scene, Camera* camera) {
 	}
 	gBuffersFBO->bind();
 
-	//set the clear color (the background color)
+	//set the clear color
 	glClearColor(0.0, 0.0, 0.0, 1.0);
 	// Clear the color and the depth buffer
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 	GFX::checkGLErrors();
-	//render entities (NOT SEMITRANSPARENT) //IDEA: implementar dithering //IDEA: forward en semitransparentes después de renderizar frame
+	//render entities
 	for (int i = 0; i < opaque_objects.size(); i++)
 	{
 		renderNode(opaque_objects[i], camera, eRenderTypes::DEFERRED);
@@ -323,8 +318,7 @@ void Renderer::renderSceneDeferred(SCN::Scene* scene, Camera* camera) {
 
 	gBuffersFBO->unbind();
 
-	prevScreenSize = size; //update screen size
-	GFX::Mesh* quad = GFX::Mesh::getQuad(); //create quad to draw to screen
+	GFX::Mesh* quad = GFX::Mesh::getQuad(); //create quad to draw to screen (shit laptop does not support VBOs. Sorry!)
 
 	switch (deferred_display) { //if special display is selected, show respective buffer and abort further rendering
 	case eDeferredDisplay::COLOR: gBuffersFBO->color_textures[0]->toViewport();
@@ -341,6 +335,7 @@ void Renderer::renderSceneDeferred(SCN::Scene* scene, Camera* camera) {
 		emissive->setUniform("u_color_texture", gBuffersFBO->color_textures[0], 0);
 		emissive->setUniform("u_normal_texture", gBuffersFBO->color_textures[1], 1);
 		emissive->setUniform("u_mat_properties_texture", gBuffersFBO->color_textures[2], 2);
+		emissive->setUniform("u_depth_texture", gBuffersFBO->depth_texture, 3);
 		quad->render(GL_TRIANGLES);
 		emissive->disable();
 		return;
@@ -354,10 +349,51 @@ void Renderer::renderSceneDeferred(SCN::Scene* scene, Camera* camera) {
 	generateShadowmaps(camera); //render shadowmap atlas
 	camera->enable(); //reactivate scene camera
 
+	//prepare SSAO
+	if (occlusion_mode != eSSAO::TEXTURE) {
+		//create fbo
+		if (!ssao_fbo || prevScreenSize.distance(size) > 0.0) {
+			delete ssao_fbo;
+			ssao_fbo = new GFX::FBO();
+			ssao_fbo->create(size.x/2, size.y/2, 1, GL_RGB, GL_UNSIGNED_BYTE, false);
+			ssao_fbo->color_textures[0]->setName("CURRENT FRAME SSAO");
+		}
+		ssao_fbo->bind();
+		glClearColor(1, 1, 1, 1);
+		glClear(GL_COLOR_BUFFER_BIT);
+		glDisable(GL_DEPTH_TEST);
+		glDisable(GL_BLEND);
+		//upload necessary shader uniforms
+		//TODO: range check (diapos)
+		//IDEA: account for normal to shade downward surfaces
+		GFX::Shader* ssao_shader = GFX::Shader::Get("ssao");
+		ssao_shader->enable();
+		ssao_shader->setUniform("u_depth_texture", gBuffersFBO->depth_texture, 0);
+		ssao_shader->setUniform("u_normal_texture", gBuffersFBO->color_textures[1], 1);
+		ssao_shader->setUniform("u_inverse_viewprojection", camera->inverse_viewprojection_matrix);
+		ssao_shader->setUniform("u_viewprojection", camera->viewprojection_matrix);
+		ssao_shader->setUniform("u_invRes", vec2(1.0 / ssao_fbo->color_textures[0]->width, 1.0 / ssao_fbo->color_textures[0]->height));
+		ssao_shader->setUniform("u_radius", ssao_radius);
+		ssao_shader->setUniform3Array("u_random_pos", (float*) &ssao_positions[0], ssao_positions.size());
+
+		//render SSAO
+		quad->render(GL_TRIANGLES);
+		ssao_shader->disable();
+		//configure linear interpolation
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+		ssao_fbo->unbind();
+
+		//TODO blur (average entre pixeles - average entre 2 frames (nuevos puntos cada frame) (weight al actual y anterior) (anterior acumula anteriores))
+		//blur image
+
+	}
+
+
+	//deferred render to a texture
+	GFX::Texture* deferred_render = new GFX::Texture();
 
 	GFX::Shader* deferred_global = GFX::Shader::Get("deferred_global");
 	deferred_global->enable();
-
 
 	//upload uniforms to draw emissive quad
 	deferred_global->setUniform("u_is_quad", 1);
@@ -380,26 +416,22 @@ void Renderer::renderSceneDeferred(SCN::Scene* scene, Camera* camera) {
 	deferred_global->setUniform("u_metal_factor", 0.5f);
 	deferred_global->setUniform("u_rough_factor", 0.5f);
 
-	
-	//variables for lighting pass
-	GFX::Mesh light_sphere;
-	Vector3f light_pos;
-	Matrix44 sphere_model;
-	float radius = 0.0f;
-
-	light_sphere.createSphere(1);
-
-	//color + ambient + emissive render and save z-buffer data
+	//initial pass (color + ambient + emissive TODO:+ ssao)
 	glEnable(GL_DEPTH_TEST);
 	glDepthFunc(GL_ALWAYS);
 	baseRenderMP(quad, deferred_global);
 
-	//set GL flags for rendering lights
+	//variables and flags for illumination pass
+	GFX::Mesh light_sphere;
+	Vector3f light_pos;
+	Matrix44 sphere_model;
+	float radius = 0.0f;
+	light_sphere.createSphere(1);
 	glEnable(GL_BLEND);
 	glEnable(GL_CULL_FACE);
 	glBlendFunc(GL_SRC_ALPHA, GL_ONE);
 
-	//light pass
+	//illumination pass
 	for (int i = 0; i < lights.size(); i++) {
 		//upload uniforms
 		lightToShaderMP(lights[i], deferred_global); //IDEA: trim unnecesary uniform uploads with a new, more specific function
@@ -439,11 +471,23 @@ void Renderer::renderSceneDeferred(SCN::Scene* scene, Camera* camera) {
 	//reset relevant GL flags
 	glEnable(GL_DEPTH_TEST);
 	glDepthFunc(GL_LESS);
+
 	//render semitransparent objects using forward rendering
 	for (int i = 0; i < semitransparent_objects.size(); i++)
 	{
 		renderNode(semitransparent_objects[i], camera, eRenderTypes::FORWARD);
 	}
+
+	deferred_render->unbind();
+	
+	//gamma pass
+	if (gui_use_gamma) {
+	}
+	else {
+		deferred_render->toViewport();
+	}
+
+	prevScreenSize = size; //update screen size
 }
 
 void Renderer::renderSkybox(GFX::Texture* cubemap)
@@ -958,6 +1002,9 @@ void Renderer::showUI()
 			ImGui::EndCombo();
 		}
 		ImGui::Combo("Display channel", (int*)&deferred_display, "DEFAULT\0COLOR\0NORMALS\0MATERIAL_PROPERTIES\0DEPTH\0EMISSIVE\0");
+		ImGui::Combo("Occlusion mode", (int*)&occlusion_mode, "TEXTURE\0SSAO\0SSAOplus\0");
+		ImGui::Checkbox("Account for gamma and linear space", &gui_use_gamma);
+		ImGui::DragFloat("SSAO radius", &ssao_radius, 0.01f, 1.0f, 20.0f);
 	}
 }
 

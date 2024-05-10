@@ -1613,3 +1613,28 @@ std::ostream& operator<<(std::ostream& os, const Vector4f& v)
 	os << v.x << ',' << v.y << ',' << v.z << ',' << v.w;
 	return os;
 }
+
+std::vector<vec3> generateSpherePoints(int num, float radius, bool hemi)
+{
+	std::vector<vec3> points;
+	points.resize(num);
+	for (int i = 0; i < num; i += 1)
+	{
+		vec3& p = points[i];
+		float u = random();
+		float v = random();
+		float theta = u * 2.0 * PI;
+		float phi = acos(2.0 * v - 1.0);
+		float r = cbrt(random() * 0.9 + 0.1) * radius;
+		float sinTheta = sin(theta);
+		float cosTheta = cos(theta);
+		float sinPhi = sin(phi);
+		float cosPhi = cos(phi);
+		p.x = r * sinPhi * cosTheta;
+		p.y = r * sinPhi * sinTheta;
+		p.z = r * cosPhi;
+		if (hemi && p.z < 0)
+			p.z *= -1.0;
+	}
+	return points;
+}

@@ -23,7 +23,11 @@ Geometry instead of quads
 todo
 
 - SSAO:
-todo
+SSAO
+SSAO+
+blurring (using previous frame)
+range check (TODO)
+normal weights (TODO)
 
 - linear space:
 todo

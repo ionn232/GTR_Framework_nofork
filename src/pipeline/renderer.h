@@ -31,6 +31,12 @@ enum eDeferredDisplay {
 	COUNT
 };
 
+enum eSSAO {
+	TEXTURE,
+	SSAO,
+	SSAOplus,
+};
+
 namespace SCN {
 
 	class Prefab;
@@ -51,8 +57,12 @@ namespace SCN {
 		bool gui_use_specular = true;
 		bool gui_use_shadowmaps = true;
 		int gui_shadowmap_res = 1024;
+		bool gui_use_gamma = true;
 		eRenderTypes render_mode = eRenderTypes::DEFERRED;
 		eDeferredDisplay deferred_display = eDeferredDisplay::DEFAULT;
+		eSSAO occlusion_mode = eSSAO::SSAO;
+
+		vec2 prevScreenSize = vec2(0.0, 0.0); //to detect if fbos must be rebuilt
 
 		GFX::Texture* skybox_cubemap;
 
@@ -61,7 +71,10 @@ namespace SCN {
 		int numShadowmaps; //to avoid building an unnecesarily large atlas
 
 		GFX::FBO* gBuffersFBO;
-		vec2 prevScreenSize = vec2(0.0, 0.0); //to detect if gbuffers must be rebuilt
+
+		GFX::FBO* ssao_fbo;
+		float ssao_radius = 10.0f;
+		std::vector<vec3> ssao_positions;
 
 		SCN::Scene* scene;
 

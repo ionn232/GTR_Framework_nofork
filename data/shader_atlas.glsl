@@ -6,6 +6,7 @@ lightMP basic.vs lightMP.fs
 gbuffers basic.vs gbuffers.fs
 deferred_global deferred.vs deferred_global.fs
 view_emissive quad.vs emissive.fs
+ssao quad.vs ssao.fs
 skybox basic.vs skybox.fs
 depth quad.vs depth.fs
 multi basic.vs multi.fs
@@ -942,20 +943,89 @@ void main()
 
 \emissive.fs
 
+#version 330 core
+
 in vec3 v_position;
 in vec2 v_uv;
 
 uniform sampler2D u_color_texture;
 uniform sampler2D u_normal_texture;
 uniform sampler2D u_mat_properties_texture;
+uniform sampler2D u_depth_texture;
 
 out vec4 FragColor;
 
 void main() {
 	vec2 uv = v_uv;
+
+	float depth = texture(u_depth_texture, uv).x;
+	if(depth == 1.0)
+		discard;
+
 	FragColor.r = texture(u_color_texture, uv).w;
 	FragColor.g = texture(u_normal_texture, uv).w;
 	FragColor.b = texture(u_mat_properties_texture, uv).w;
+	FragColor.a = 1.0;
+}
+
+\ssao.fs
+
+#version 330 core
+
+const int RANDOM_POINTS = 64;
+
+in vec3 v_position;
+in vec2 v_uv;
+
+uniform sampler2D u_depth_texture;
+uniform sampler2D u_normal_texture;
+
+uniform mat4 u_inverse_viewprojection;
+uniform mat4 u_viewprojection;
+uniform vec2 u_invRes; 
+
+uniform float u_radius;
+uniform float u_dist_threshold; //TODO range check
+
+uniform vec3 u_random_pos[RANDOM_POINTS];
+
+out vec4 FragColor;
+
+void main() {
+	vec2 uv = gl_FragCoord.xy * u_invRes.xy;
+	float depth = texture(u_depth_texture, uv).x;
+	vec3 N = texture(u_normal_texture, uv).xyz * 2.0 - vec3(1.0);
+	N = normalize(N);
+
+	if(depth == 1.0)
+		discard;
+
+	//reconstruct world position from depth and inv. viewproj
+	vec4 screen_pos = vec4(uv.x*2.0-1.0, uv.y*2.0-1.0, depth*2.0-1.0, 1.0);
+	vec4 proj_worldpos = u_inverse_viewprojection * screen_pos;
+	vec3 worldpos = proj_worldpos.xyz / proj_worldpos.w;
+
+	int num = RANDOM_POINTS;
+	for (int i=0; i<RANDOM_POINTS; i++) {
+		vec3 p = worldpos + u_random_pos[i] * u_radius;
+		vec4 p_proj = u_viewprojection * vec4(p, 1.0);
+		p_proj.xy /= p_proj.w; //convert to clipspace from homogeneous
+		
+		//apply a tiny bias to its z before converting to clip-space
+		p_proj.z = (p_proj.z - 0.005) / p_proj.w;
+		p_proj.xyz = p_proj.xyz * 0.5 + vec3(0.5); //to [0..1]
+		
+		//read p true depth
+		float pdepth = texture( u_depth_texture, p_proj.xy ).x;
+		
+		//compare true depth with its depth
+		if( pdepth < p_proj.z) //if true depth smaller, is inside
+			num--; //remove this point from the list of visible
+	}
+
+	float occlusion_factor = float(num)/RANDOM_POINTS;
+
+	FragColor.xyz = vec3(occlusion_factor);
 	FragColor.a = 1.0;
 }
 
