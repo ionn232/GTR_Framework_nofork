@@ -371,7 +371,7 @@ void Renderer::renderSceneDeferred(SCN::Scene* scene, Camera* camera) {
 		glDisable(GL_DEPTH_TEST);
 		glDisable(GL_BLEND);
 		//upload necessary shader uniforms
-		//TODO: range check (diapos)
+		//IDEA: range check (diapos)
 		//IDEA: account for normal to shade downward surfaces
 		GFX::Shader* ssao_shader = GFX::Shader::Get("ssao");
 		ssao_shader->enable();
@@ -381,6 +381,7 @@ void Renderer::renderSceneDeferred(SCN::Scene* scene, Camera* camera) {
 		ssao_shader->setUniform("u_viewprojection", camera->viewprojection_matrix);
 		ssao_shader->setUniform("u_invRes", vec2(1.0 / ssao_fbo->color_textures[0]->width, 1.0 / ssao_fbo->color_textures[0]->height));
 		ssao_shader->setUniform("u_radius", ssao_radius);
+		ssao_shader->setUniform("u_use_plus", occlusion_mode - 1); //SSAO --> 0, SSAO+ --> 1
 		ssao_shader->setUniform3Array("u_random_pos", (float*) &ssao_positions[0], ssao_positions.size());
 
 		//render SSAO

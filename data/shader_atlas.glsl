@@ -934,8 +934,8 @@ void main()
 		//occlusion from texture
 		float occlusion = texture( u_mat_properties_texture, uv).r;
 		if (u_occlusion_type != 0) { //blend occlusion from SSAO map
-			occlusion *= 0.5;
-			occlusion += texture( u_ssao_map, uv).r * 0.5;
+			occlusion *= 0.2;
+			occlusion += texture( u_ssao_map, uv).r * 0.8;
 		}
 		light += u_ambient_light * occlusion;
 	}
@@ -1002,6 +1002,8 @@ uniform float u_dist_threshold; //TODO range check
 
 uniform vec3 u_random_pos[RANDOM_POINTS];
 
+uniform int u_use_plus;
+
 out vec4 FragColor;
 
 void main() {
@@ -1020,7 +1022,17 @@ void main() {
 
 	int num = RANDOM_POINTS;
 	for (int i=0; i<RANDOM_POINTS; i++) {
+		//get point's world position
 		vec3 p = worldpos + u_random_pos[i] * u_radius;
+		if (u_use_plus == 1) {
+			//project points to the correct hemisphere if they're not
+				vec3 point_vector = u_random_pos[i] * u_radius;
+				if( dot(N, point_vector) < 0.0) {
+					p -= 2.0 * point_vector;
+				}
+		}
+
+		//convert to texture space
 		vec4 p_proj = u_viewprojection * vec4(p, 1.0);
 		p_proj.xy /= p_proj.w; //convert to clipspace from homogeneous
 		
@@ -1148,17 +1160,6 @@ void main() {
 
 	FragColor.xyz = vec3(occlusion_factor/ valid_pixels);
 	FragColor.a = 1.0;
-
-	//vec2 texelSize = 1.0 / vec2(textureSize(u_ssao_map, 0));
-	//float result = 0.0;
-	//for (int x = -2; x < 2; ++x) {
-	//	for (int y = -2; y < 2; ++y) {
-	//		vec2 offset = vec2(float(x), float(y)) * texelSize;
-	//		result += texture(u_ssao_map, v_uv + offset).r;
-	//	}
-	//}
-	//FragColor.xyz = vec3(result / (4.0 * 4.0));
-	//FragColor.a = 1.0;
 }
 
 \skybox.fs
