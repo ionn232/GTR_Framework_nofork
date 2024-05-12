@@ -4,112 +4,122 @@ C:\Users\sigam\Desktop\GTR_nofork\src\extra\cJSON.h(103,16): warning C4099: 'cJS
   C:\Users\sigam\Desktop\GTR_nofork\src\extra\cJSON.h(103,16):
   vea la declaración de 'cJSON'
   
-C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(74,20): warning C4018: '<': no coinciden signed/unsigned
-C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(102,8): warning C4244: 'return': conversión de 'float' a 'int'; posible pérdida de datos
-C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(126,127): warning C4244: 'argumento': conversión de 'double' a 'float'; posible pérdida de datos
-C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(126,100): warning C4244: 'argumento': conversión de 'double' a 'float'; posible pérdida de datos
-C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(126,74): warning C4244: 'argumento': conversión de 'double' a 'float'; posible pérdida de datos
-C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(126,47): warning C4244: 'argumento': conversión de 'double' a 'float'; posible pérdida de datos
-C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(205,10): warning C4244: 'inicializando': conversión de 'long' a 'float'; posible pérdida de datos
-C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(255,20): warning C4018: '<': no coinciden signed/unsigned
-C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(260,20): warning C4018: '<': no coinciden signed/unsigned
-C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(285,20): warning C4018: '<': no coinciden signed/unsigned
-C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(290,20): warning C4018: '<': no coinciden signed/unsigned
-C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(305,35): warning C4244: 'argumento': conversión de 'T' a 'int'; posible pérdida de datos
-C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(305,35): warning C4244:         with
-C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(305,35): warning C4244:         [
-C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(305,35): warning C4244:             T=float
-C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(305,35): warning C4244:         ]
-C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(305,27): warning C4244: 'argumento': conversión de 'T' a 'int'; posible pérdida de datos
-C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(305,27): warning C4244:         with
-C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(305,27): warning C4244:         [
-C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(305,27): warning C4244:             T=float
-C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(305,27): warning C4244:         ]
-C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(315,20): warning C4018: '<': no coinciden signed/unsigned
-C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(362,37): warning C4244: 'argumento': conversión de 'T' a 'int'; posible pérdida de datos
-C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(362,37): warning C4244:         with
-C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(362,37): warning C4244:         [
-C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(362,37): warning C4244:             T=float
-C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(362,37): warning C4244:         ]
-C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(362,27): warning C4244: 'argumento': conversión de 'T' a 'int'; posible pérdida de datos
-C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(362,27): warning C4244:         with
-C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(362,27): warning C4244:         [
-C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(362,27): warning C4244:             T=float
-C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(362,27): warning C4244:         ]
-C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(364,44): warning C4244: 'argumento': conversión de 'T' a 'int'; posible pérdida de datos
-C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(364,44): warning C4244:         with
-C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(364,44): warning C4244:         [
-C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(364,44): warning C4244:             T=float
-C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(364,44): warning C4244:         ]
-C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(364,32): warning C4244: 'argumento': conversión de 'T' a 'int'; posible pérdida de datos
-C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(364,32): warning C4244:         with
-C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(364,32): warning C4244:         [
-C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(364,32): warning C4244:             T=float
-C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(364,32): warning C4244:         ]
-C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(382,90): warning C4244: 'argumento': conversión de 'double' a 'T'; posible pérdida de datos
-C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(382,90): warning C4244:         with
-C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(382,90): warning C4244:         [
-C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(382,90): warning C4244:             T=float
-C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(382,90): warning C4244:         ]
-C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(382,48): warning C4244: 'argumento': conversión de 'double' a 'T'; posible pérdida de datos
-C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(382,48): warning C4244:         with
-C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(382,48): warning C4244:         [
-C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(382,48): warning C4244:             T=float
-C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(382,48): warning C4244:         ]
-C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(422,68): warning C4244: 'argumento': conversión de 'double' a 'T'; posible pérdida de datos
-C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(422,68): warning C4244:         with
-C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(422,68): warning C4244:         [
-C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(422,68): warning C4244:             T=float
-C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(422,68): warning C4244:         ]
-C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(422,26): warning C4244: 'argumento': conversión de 'double' a 'T'; posible pérdida de datos
-C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(422,26): warning C4244:         with
-C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(422,26): warning C4244:         [
-C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(422,26): warning C4244:             T=float
-C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(422,26): warning C4244:         ]
-C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(460,65): warning C4244: 'argumento': conversión de 'double' a 'T'; posible pérdida de datos
-C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(460,65): warning C4244:         with
-C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(460,65): warning C4244:         [
-C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(460,65): warning C4244:             T=float
-C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(460,65): warning C4244:         ]
-C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(460,51): warning C4244: 'argumento': conversión de 'double' a 'T'; posible pérdida de datos
-C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(460,51): warning C4244:         with
-C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(460,51): warning C4244:         [
-C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(460,51): warning C4244:             T=float
-C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(460,51): warning C4244:         ]
-C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(487,20): warning C4018: '<': no coinciden signed/unsigned
-C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(528,20): warning C4018: '<': no coinciden signed/unsigned
-C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(608,14): warning C4244: 'inicializando': conversión de 'double' a 'float'; posible pérdida de datos
-C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(621,20): warning C4018: '<': no coinciden signed/unsigned
-C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(677,10): warning C4244: 'inicializando': conversión de 'long' a 'float'; posible pérdida de datos
-C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(780,10): warning C4244: 'inicializando': conversión de 'long' a 'float'; posible pérdida de datos
-C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(821,21): warning C4018: '<': no coinciden signed/unsigned
-C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(909,10): warning C4244: 'inicializando': conversión de 'long' a 'float'; posible pérdida de datos
-C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(963,80): warning C4244: 'argumento': conversión de 'double' a 'T'; posible pérdida de datos
-C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(963,80): warning C4244:         with
-C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(963,80): warning C4244:         [
-C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(963,80): warning C4244:             T=float
-C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(963,80): warning C4244:         ]
-C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(963,38): warning C4244: 'argumento': conversión de 'double' a 'T'; posible pérdida de datos
-C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(963,38): warning C4244:         with
-C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(963,38): warning C4244:         [
-C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(963,38): warning C4244:             T=float
-C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(963,38): warning C4244:         ]
-C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(989,75): warning C4244: 'argumento': conversión de 'double' a 'T'; posible pérdida de datos
-C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(989,75): warning C4244:         with
-C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(989,75): warning C4244:         [
-C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(989,75): warning C4244:             T=float
-C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(989,75): warning C4244:         ]
-C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(989,35): warning C4244: 'argumento': conversión de 'double' a 'T'; posible pérdida de datos
-C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(989,35): warning C4244:         with
-C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(989,35): warning C4244:         [
-C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(989,35): warning C4244:             T=float
-C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(989,35): warning C4244:         ]
+C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(75,20): warning C4018: '<': no coinciden signed/unsigned
+C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(103,8): warning C4244: 'return': conversión de 'float' a 'int'; posible pérdida de datos
+C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(127,127): warning C4244: 'argumento': conversión de 'double' a 'float'; posible pérdida de datos
+C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(127,100): warning C4244: 'argumento': conversión de 'double' a 'float'; posible pérdida de datos
+C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(127,74): warning C4244: 'argumento': conversión de 'double' a 'float'; posible pérdida de datos
+C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(127,47): warning C4244: 'argumento': conversión de 'double' a 'float'; posible pérdida de datos
+C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(206,10): warning C4244: 'inicializando': conversión de 'long' a 'float'; posible pérdida de datos
+C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(256,20): warning C4018: '<': no coinciden signed/unsigned
+C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(261,20): warning C4018: '<': no coinciden signed/unsigned
+C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(286,20): warning C4018: '<': no coinciden signed/unsigned
+C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(291,20): warning C4018: '<': no coinciden signed/unsigned
+C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(306,35): warning C4244: 'argumento': conversión de 'T' a 'int'; posible pérdida de datos
+C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(306,35): warning C4244:         with
+C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(306,35): warning C4244:         [
+C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(306,35): warning C4244:             T=float
+C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(306,35): warning C4244:         ]
+C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(306,27): warning C4244: 'argumento': conversión de 'T' a 'int'; posible pérdida de datos
+C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(306,27): warning C4244:         with
+C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(306,27): warning C4244:         [
+C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(306,27): warning C4244:             T=float
+C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(306,27): warning C4244:         ]
+C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(317,20): warning C4018: '<': no coinciden signed/unsigned
+C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(360,37): warning C4244: 'argumento': conversión de 'T' a 'int'; posible pérdida de datos
+C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(360,37): warning C4244:         with
+C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(360,37): warning C4244:         [
+C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(360,37): warning C4244:             T=float
+C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(360,37): warning C4244:         ]
+C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(360,27): warning C4244: 'argumento': conversión de 'T' a 'int'; posible pérdida de datos
+C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(360,27): warning C4244:         with
+C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(360,27): warning C4244:         [
+C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(360,27): warning C4244:             T=float
+C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(360,27): warning C4244:         ]
+C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(362,44): warning C4244: 'argumento': conversión de 'T' a 'int'; posible pérdida de datos
+C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(362,44): warning C4244:         with
+C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(362,44): warning C4244:         [
+C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(362,44): warning C4244:             T=float
+C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(362,44): warning C4244:         ]
+C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(362,32): warning C4244: 'argumento': conversión de 'T' a 'int'; posible pérdida de datos
+C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(362,32): warning C4244:         with
+C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(362,32): warning C4244:         [
+C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(362,32): warning C4244:             T=float
+C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(362,32): warning C4244:         ]
+C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(380,90): warning C4244: 'argumento': conversión de 'double' a 'T'; posible pérdida de datos
+C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(380,90): warning C4244:         with
+C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(380,90): warning C4244:         [
+C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(380,90): warning C4244:             T=float
+C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(380,90): warning C4244:         ]
+C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(380,48): warning C4244: 'argumento': conversión de 'double' a 'T'; posible pérdida de datos
+C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(380,48): warning C4244:         with
+C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(380,48): warning C4244:         [
+C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(380,48): warning C4244:             T=float
+C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(380,48): warning C4244:         ]
+C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(420,68): warning C4244: 'argumento': conversión de 'double' a 'T'; posible pérdida de datos
+C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(420,68): warning C4244:         with
+C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(420,68): warning C4244:         [
+C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(420,68): warning C4244:             T=float
+C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(420,68): warning C4244:         ]
+C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(420,26): warning C4244: 'argumento': conversión de 'double' a 'T'; posible pérdida de datos
+C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(420,26): warning C4244:         with
+C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(420,26): warning C4244:         [
+C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(420,26): warning C4244:             T=float
+C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(420,26): warning C4244:         ]
+C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(444,36): warning C4244: 'argumento': conversión de 'T' a 'int'; posible pérdida de datos
+C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(444,36): warning C4244:         with
+C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(444,36): warning C4244:         [
+C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(444,36): warning C4244:             T=float
+C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(444,36): warning C4244:         ]
+C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(444,28): warning C4244: 'argumento': conversión de 'T' a 'int'; posible pérdida de datos
+C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(444,28): warning C4244:         with
+C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(444,28): warning C4244:         [
+C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(444,28): warning C4244:             T=float
+C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(444,28): warning C4244:         ]
+C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(469,65): warning C4244: 'argumento': conversión de 'double' a 'T'; posible pérdida de datos
+C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(469,65): warning C4244:         with
+C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(469,65): warning C4244:         [
+C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(469,65): warning C4244:             T=float
+C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(469,65): warning C4244:         ]
+C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(469,51): warning C4244: 'argumento': conversión de 'double' a 'T'; posible pérdida de datos
+C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(469,51): warning C4244:         with
+C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(469,51): warning C4244:         [
+C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(469,51): warning C4244:             T=float
+C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(469,51): warning C4244:         ]
+C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(496,20): warning C4018: '<': no coinciden signed/unsigned
+C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(537,20): warning C4018: '<': no coinciden signed/unsigned
+C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(625,14): warning C4244: 'inicializando': conversión de 'double' a 'float'; posible pérdida de datos
+C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(638,20): warning C4018: '<': no coinciden signed/unsigned
+C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(694,10): warning C4244: 'inicializando': conversión de 'long' a 'float'; posible pérdida de datos
+C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(797,10): warning C4244: 'inicializando': conversión de 'long' a 'float'; posible pérdida de datos
+C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(838,21): warning C4018: '<': no coinciden signed/unsigned
+C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(926,10): warning C4244: 'inicializando': conversión de 'long' a 'float'; posible pérdida de datos
+C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(980,80): warning C4244: 'argumento': conversión de 'double' a 'T'; posible pérdida de datos
+C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(980,80): warning C4244:         with
+C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(980,80): warning C4244:         [
+C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(980,80): warning C4244:             T=float
+C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(980,80): warning C4244:         ]
+C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(980,38): warning C4244: 'argumento': conversión de 'double' a 'T'; posible pérdida de datos
+C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(980,38): warning C4244:         with
+C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(980,38): warning C4244:         [
+C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(980,38): warning C4244:             T=float
+C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(980,38): warning C4244:         ]
+C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(1006,75): warning C4244: 'argumento': conversión de 'double' a 'T'; posible pérdida de datos
+C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(1006,75): warning C4244:         with
+C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(1006,75): warning C4244:         [
+C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(1006,75): warning C4244:             T=float
+C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(1006,75): warning C4244:         ]
+C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(1006,35): warning C4244: 'argumento': conversión de 'double' a 'T'; posible pérdida de datos
+C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(1006,35): warning C4244:         with
+C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(1006,35): warning C4244:         [
+C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(1006,35): warning C4244:             T=float
+C:\Users\sigam\Desktop\GTR_nofork\src\pipeline\renderer.cpp(1006,35): warning C4244:         ]
      Creando biblioteca ..\..\GTR.lib y objeto ..\..\GTR.exp
 LINK : warning LNK4098: la biblioteca predeterminada'LIBCMT' entra en conflicto con otras bibliotecas; use la biblioteca /NODEFAULTLIB:biblioteca
   Generando código
-  25 of 5854 functions ( 0.4%) were compiled, the rest were copied from previous compilation.
+  1 of 5853 functions (<0.1%) were compiled, the rest were copied from previous compilation.
     0 functions were new in current compilation
-    75 functions had inline decision re-evaluated but remain unchanged
+    72 functions had inline decision re-evaluated but remain unchanged
   Generación de código finalizada
 glew32s.lib(glew.obj) : warning LNK4099: no se encontró PDB '' con 'glew32s.lib(glew.obj)' o en ''; se vinculará el objeto sin tener en cuenta información de depuración
   visualstudio.vcxproj -> C:\Users\sigam\Desktop\GTR_nofork\GTR.exe

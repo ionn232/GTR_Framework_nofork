@@ -12,6 +12,7 @@ blur_neighbors quad.vs blur_neighbors.fs
 skybox basic.vs skybox.fs
 depth quad.vs depth.fs
 multi basic.vs multi.fs
+gamma quad.vs gamma.fs
 
 \basic.vs
 
@@ -830,8 +831,9 @@ void main()
 	float spec_ks = texture( u_mat_properties_texture, uv).g;
 	float spec_a =  texture( u_mat_properties_texture, uv).b;
 
-	if(depth == 1.0)
+	if(depth == 1.0) {
 		discard;
+	}
 
 	//reconstruct world position from depth and inv. viewproj
 	vec4 screen_pos = vec4(uv.x*2.0-1.0, uv.y*2.0-1.0, depth*2.0-1.0, 1.0);
@@ -1049,6 +1051,13 @@ void main() {
 	}
 
 	float occlusion_factor = float(num)/RANDOM_POINTS;
+
+	//shade more if normal is pointing down
+	vec3 down_vector = vec3(0.0,-1.0,0.0);
+	float extra_shading_factor = dot(N, down_vector);
+	if (extra_shading_factor > 0.0) {
+		occlusion_factor *= (1.0 - extra_shading_factor);
+	}
 
 	FragColor.xyz = vec3(occlusion_factor);
 	FragColor.a = 1.0;
@@ -1271,4 +1280,21 @@ void main()
 
 	//calcule the position of the vertex using the matrices
 	gl_Position = u_viewprojection * vec4( v_world_position, 1.0 );
+}
+
+\gamma.fs
+#version 330 core
+
+in vec2 v_uv;
+
+uniform sampler2D u_texture;
+uniform float u_igamma; //inverse gamma
+
+out vec4 FragColor;
+
+void main() {
+	vec4 color = texture2D( u_texture, v_uv );
+	vec3 rgb = color.xyz;
+	rgb = pow( rgb, vec3( u_igamma ) );
+	FragColor = vec4( rgb, 1.0 );
 }

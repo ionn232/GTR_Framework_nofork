@@ -17,7 +17,7 @@ Done:
 Gbuffers
 Render illumination
 Forward for alpha nodes
-Geometry instead of quads
+Geometry instead of quads (point&spotlight)
 
 - PBR:
 todo
@@ -25,9 +25,8 @@ todo
 - SSAO:
 SSAO
 SSAO+
-blurring (using previous frame)
-range check (TODO)
-normal weights (TODO)
+blurring (tried using previous results, final version uses neighboring pixels)
+normal component (if normal is facing down occlusion is more intense)
 
 - linear space:
 todo

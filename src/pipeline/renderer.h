@@ -58,10 +58,10 @@ namespace SCN {
 		bool gui_use_specular = true;
 		bool gui_use_shadowmaps = true;
 		int gui_shadowmap_res = 1024;
-		bool gui_use_gamma = true;
+		bool gui_use_tonemapper = false;
 		eRenderTypes render_mode = eRenderTypes::DEFERRED;
 		eDeferredDisplay deferred_display = eDeferredDisplay::DEFAULT;
-		eSSAO occlusion_mode = eSSAO::SSAO;
+		eSSAO occlusion_mode = eSSAO::SSAOplus;
 
 		vec2 prevScreenSize = vec2(0.0, 0.0); //to detect if fbos must be rebuilt
 
@@ -72,6 +72,7 @@ namespace SCN {
 		int numShadowmaps; //to avoid building an unnecesarily large atlas
 
 		GFX::FBO* gBuffersFBO;
+		GFX::FBO* deferred_fbo;
 
 		GFX::FBO* ssao_fbo; //current frame's occlusion
 		GFX::FBO* blurred_ssao; //occlusion results
