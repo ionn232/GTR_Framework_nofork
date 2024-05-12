@@ -7,6 +7,8 @@ gbuffers basic.vs gbuffers.fs
 deferred_global deferred.vs deferred_global.fs
 view_emissive quad.vs emissive.fs
 ssao quad.vs ssao.fs
+blur_reprojection quad.vs blur_reprojection.fs
+blur_neighbors quad.vs blur_neighbors.fs
 skybox basic.vs skybox.fs
 depth quad.vs depth.fs
 multi basic.vs multi.fs
@@ -771,6 +773,12 @@ uniform float u_shadow_bias;
 uniform int u_shadowmap_index;
 uniform int u_shadowmap_dimensions;
 
+uniform sampler2D u_ssao_map;
+uniform int u_occlusion_type;
+		//TEXTURE = 0,
+		//SSAO = 1,
+		//SSAO+ = 2
+
 out vec4 FragColor;
 
 float computeShadow(vec3 wp){
@@ -922,8 +930,13 @@ void main()
 			if (final_a != 0) {light += final_ks * pow(NdotH, final_a) * u_light_col; }
 		}
 	}
-	else if (u_light_type == 4) {		//ambient light
+	else if (u_light_type == 4) {	//ambient light
+		//occlusion from texture
 		float occlusion = texture( u_mat_properties_texture, uv).r;
+		if (u_occlusion_type != 0) { //blend occlusion from SSAO map
+			occlusion *= 0.5;
+			occlusion += texture( u_ssao_map, uv).r * 0.5;
+		}
 		light += u_ambient_light * occlusion;
 	}
 
@@ -972,7 +985,7 @@ void main() {
 
 #version 330 core
 
-const int RANDOM_POINTS = 64;
+const int RANDOM_POINTS = 128;
 
 in vec3 v_position;
 in vec2 v_uv;
@@ -1027,6 +1040,125 @@ void main() {
 
 	FragColor.xyz = vec3(occlusion_factor);
 	FragColor.a = 1.0;
+}
+
+\blur_reprojection.fs
+
+//NOT WORKING CORRECTLY
+
+#version 330 core
+
+in vec3 v_position;
+in vec2 v_uv;
+
+uniform sampler2D u_current_frame;
+uniform sampler2D u_last_results;
+uniform sampler2D u_depth_texture;
+
+uniform mat4 u_inverse_viewprojection;
+uniform mat4 u_previous_viewprojection;
+uniform vec2 u_invRes;
+
+out vec4 FragColor;
+
+void main() {
+	vec2 uv = gl_FragCoord.xy * u_invRes.xy;
+	float current_depth = texture(u_depth_texture, uv).x;
+
+	float current_occlusion = texture(u_current_frame, uv).x;
+	float previous_occlusion = 1.0;
+
+	//reconstruct world position from depth and inv. viewproj
+	vec4 screen_pos = vec4(uv.x*2.0-1.0, uv.y*2.0-1.0, current_depth*2.0-1.0, 1.0);
+	vec4 proj_worldpos = u_inverse_viewprojection * screen_pos;
+	vec3 worldpos = proj_worldpos.xyz / proj_worldpos.w;
+
+	//project world position to the previous results
+	vec4 proj_pos = u_previous_viewprojection * vec4(worldpos,1.0);
+
+	//from homogeneus space to clip space
+	vec2 prev_uv = (proj_pos.xy / proj_pos.w);
+
+	//from clip space to uv space
+	prev_uv = prev_uv * 0.5 + vec2(0.5);
+
+	//if pixel was not seen in previous frame consider current results only
+	if( prev_uv.x < 0.0 || prev_uv.x > 1.0 || prev_uv.y < 0.0 || prev_uv.y > 1.0 || current_depth == 1.0) {
+		previous_occlusion = current_occlusion;
+	}
+	//get value from previous results
+	else {
+		previous_occlusion = texture(u_last_results, prev_uv).x;
+	}
+
+	//get final occlusion value
+	float occlusion_factor = 0.1 * current_occlusion + 0.9 * previous_occlusion;
+
+	//for some reason the depth is inconsistent and results incorrect :(
+	float prev_depth = texture(u_depth_texture, prev_uv).x;
+	if (prev_depth == 1.0) {occlusion_factor = 1.0;}
+
+	FragColor.xyz = vec3(occlusion_factor);
+	FragColor.a = 1.0;
+}
+
+\blur_neighbors.fs
+
+#version 330 core
+
+in vec3 v_position;
+in vec2 v_uv;
+
+uniform sampler2D u_ssao_map;
+uniform sampler2D u_depth_texture;
+
+uniform vec2 u_invRes;
+
+out vec4 FragColor;
+
+void main() {
+	vec2 uv = gl_FragCoord.xy * u_invRes.xy;
+
+	float depth = texture(u_depth_texture, uv).x;
+	if (depth==1.0) {
+		discard;
+	}
+
+	float occlusion_factor = 0.0;
+	float valid_pixels = pow(3.0, 2.0);
+
+	float current_depth;
+	//blur by averaging the pixels on a 3*3 square centered on the current pixel.
+	vec2 current_uv;
+	vec2 offset = vec2(-1.0, -1.0) * u_invRes;
+	for (int i=0; i < 3; i++) {
+		for (int j=0; j < 3; j++) {
+				current_uv = vec2(float(i),float(j)) * u_invRes;
+				current_uv += uv;
+				current_uv += offset;
+				current_depth = texture(u_depth_texture, uv).x; //to avoid counting skybox pixels as valid occlusion data
+				if (current_uv.x < 0.0 || current_uv.x > 1.0 || current_uv.y < 0.0 || current_uv.y > 1.0 || current_depth == 1.0) {
+					valid_pixels -= 1.0;
+				}
+				else {
+					occlusion_factor += texture(u_ssao_map, current_uv).x;
+				}
+		}
+	}
+
+	FragColor.xyz = vec3(occlusion_factor/ valid_pixels);
+	FragColor.a = 1.0;
+
+	//vec2 texelSize = 1.0 / vec2(textureSize(u_ssao_map, 0));
+	//float result = 0.0;
+	//for (int x = -2; x < 2; ++x) {
+	//	for (int y = -2; y < 2; ++y) {
+	//		vec2 offset = vec2(float(x), float(y)) * texelSize;
+	//		result += texture(u_ssao_map, v_uv + offset).r;
+	//	}
+	//}
+	//FragColor.xyz = vec3(result / (4.0 * 4.0));
+	//FragColor.a = 1.0;
 }
 
 \skybox.fs

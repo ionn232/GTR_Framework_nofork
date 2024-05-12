@@ -28,6 +28,7 @@ enum eDeferredDisplay {
 	MATERIAL_PROPERTIES,
 	DEPTH, //IDEA: traducir de logaritmico a lineal, adaptar shader depth.fs
 	EMISSIVE,
+	SSAO_result,
 	COUNT
 };
 
@@ -72,9 +73,11 @@ namespace SCN {
 
 		GFX::FBO* gBuffersFBO;
 
-		GFX::FBO* ssao_fbo;
+		GFX::FBO* ssao_fbo; //current frame's occlusion
+		GFX::FBO* blurred_ssao; //occlusion results
 		float ssao_radius = 10.0f;
 		std::vector<vec3> ssao_positions;
+		Matrix44 prevViewProj; //for temporal reprojection in SSAO
 
 		SCN::Scene* scene;
 

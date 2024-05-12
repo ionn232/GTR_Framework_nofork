@@ -40,8 +40,11 @@ Renderer::Renderer(const char* shader_atlas_filename)
 	shadowmapAtlas = nullptr;
 	gBuffersFBO = nullptr;
 	ssao_fbo = nullptr;
+	blurred_ssao = nullptr;
 
-	ssao_positions = generateSpherePoints(64, 1, false);
+	prevViewProj = Matrix44::IDENTITY;
+
+	ssao_positions = generateSpherePoints(128, 1, false);
 
 	if (!GFX::Shader::LoadAtlas(shader_atlas_filename))
 		exit(1);
@@ -225,12 +228,10 @@ void Renderer::renderScene(SCN::Scene* scene, Camera* camera) {
 	case eRenderTypes::DEFERRED: //deferred rendering
 		renderSceneDeferred(scene, camera);
 		break;
-	//new cases here
-	
-	case eRenderTypes::FORWARD: //flat or forward rendering TODO flat not working since refactor, create renderSceneFlat or change RenderSceneForward
+	case eRenderTypes::FORWARD: //forward rendering
 		renderSceneForward(scene, camera);
 		break;
-	default:
+	default: //flat rendering
 		renderSceneFlat(scene, camera);
 	}
 }
@@ -351,12 +352,18 @@ void Renderer::renderSceneDeferred(SCN::Scene* scene, Camera* camera) {
 
 	//prepare SSAO
 	if (occlusion_mode != eSSAO::TEXTURE) {
+		bool firstIteration = false;
 		//create fbo
 		if (!ssao_fbo || prevScreenSize.distance(size) > 0.0) {
 			delete ssao_fbo;
+			delete blurred_ssao;
 			ssao_fbo = new GFX::FBO();
+			blurred_ssao = new GFX::FBO();
 			ssao_fbo->create(size.x/2, size.y/2, 1, GL_RGB, GL_UNSIGNED_BYTE, false);
-			ssao_fbo->color_textures[0]->setName("CURRENT FRAME SSAO");
+			ssao_fbo->color_textures[0]->setName("RAW SSAO");
+			blurred_ssao->create(size.x / 2, size.y / 2, 1, GL_RGB, GL_UNSIGNED_BYTE, false);
+			blurred_ssao->color_textures[0]->setName("BLURRED SSAO");
+			firstIteration = true;
 		}
 		ssao_fbo->bind();
 		glClearColor(1, 1, 1, 1);
@@ -383,14 +390,55 @@ void Renderer::renderSceneDeferred(SCN::Scene* scene, Camera* camera) {
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 		ssao_fbo->unbind();
 
-		//TODO blur (average entre pixeles - average entre 2 frames (nuevos puntos cada frame) (weight al actual y anterior) (anterior acumula anteriores))
-		//blur image
+		//blur image using reprojection (results did not look good, no time to fix)
+		/*
+		if (!firstIteration) {
+			GFX::Shader* ssao_blur_shader = GFX::Shader::Get("blur_reprojection");
+			blurred_ssao->bind();
+			ssao_blur_shader->enable();
+			//ssao occlusion textures
+			ssao_blur_shader->setUniform("u_current_frame", ssao_fbo->color_textures[0], 0);
+			ssao_blur_shader->setUniform("u_last_results", blurred_ssao->color_textures[0], 1);
+			//data needed for temporal reprojection
+			ssao_blur_shader->setUniform("u_depth_texture", gBuffersFBO->depth_texture, 2);
+			ssao_shader->setUniform("u_inverse_viewprojection", camera->inverse_viewprojection_matrix);
+			ssao_shader->setUniform("u_previous_viewprojection", prevViewProj);
+			ssao_shader->setUniform("u_invRes", vec2(1.0 / ssao_fbo->color_textures[0]->width, 1.0 / ssao_fbo->color_textures[0]->height));
 
+			quad->render(GL_TRIANGLES);
+			ssao_blur_shader->disable();
+			blurred_ssao->unbind();
+
+		}
+		else {
+			ssao_fbo->color_textures[0]->copyTo(blurred_ssao->color_textures[0]);
+		} */
+		
+		//blur using neighbor pixels
+		GFX::Shader* ssao_blur_shader = GFX::Shader::Get("blur_neighbors");
+		ssao_blur_shader->enable();
+		blurred_ssao->bind();
+		vec2 invRes = vec2(1.0 / ssao_fbo->color_textures[0]->width, 1.0 / ssao_fbo->color_textures[0]->height);
+		ssao_blur_shader->setUniform("u_ssao_map", ssao_fbo->color_textures[0], 0);
+		ssao_blur_shader->setUniform("u_depth_texture", gBuffersFBO->depth_texture, 1);
+		int dimensions = 3;
+		ssao_shader->setUniform("u_blur_dimensions", dimensions);
+		ssao_shader->setUniform("u_invRes", invRes);
+		glClear(GL_COLOR_BUFFER_BIT);
+		quad->render(GL_TRIANGLES);
+		blurred_ssao->unbind();
+		ssao_blur_shader->disable();
 	}
-
+	//SSAO to viewport if necessary
+	if (deferred_display == eDeferredDisplay::SSAO_result) {
+		blurred_ssao->color_textures[0]->toViewport();
+		prevScreenSize = size; //update screen size to prevent textures getting destroyed each frame
+		return;
+	}
 
 	//deferred render to a texture
 	GFX::Texture* deferred_render = new GFX::Texture();
+	deferred_render->bind();
 
 	GFX::Shader* deferred_global = GFX::Shader::Get("deferred_global");
 	deferred_global->enable();
@@ -404,6 +452,9 @@ void Renderer::renderSceneDeferred(SCN::Scene* scene, Camera* camera) {
 	deferred_global->setUniform("u_normal_texture", gBuffersFBO->color_textures[1], 1);
 	deferred_global->setUniform("u_mat_properties_texture", gBuffersFBO->color_textures[2], 2);
 	deferred_global->setUniform("u_depth_texture", gBuffersFBO->depth_texture, 3);
+	deferred_global->setUniform("u_occlusion_type", occlusion_mode);
+	deferred_global->setUniform("u_ssao_map", (occlusion_mode!=eSSAO::TEXTURE ? blurred_ssao->color_textures[0] : GFX::Texture::getWhiteTexture()), 4);
+
 
 	deferred_global->setUniform("u_invRes", vec2(1.0 / size.x, 1.0 / size.y));
 	deferred_global->setUniform("u_ambient_light", scene->ambient_light);
@@ -1001,7 +1052,7 @@ void Renderer::showUI()
 			ImGui::RadioButton("Deferred", (int*)&render_mode, (int)eRenderTypes::DEFERRED);
 			ImGui::EndCombo();
 		}
-		ImGui::Combo("Display channel", (int*)&deferred_display, "DEFAULT\0COLOR\0NORMALS\0MATERIAL_PROPERTIES\0DEPTH\0EMISSIVE\0");
+		ImGui::Combo("Display channel", (int*)&deferred_display, "DEFAULT\0COLOR\0NORMALS\0MATERIAL_PROPERTIES\0DEPTH\0EMISSIVE\0SSAO_result\0");
 		ImGui::Combo("Occlusion mode", (int*)&occlusion_mode, "TEXTURE\0SSAO\0SSAOplus\0");
 		ImGui::Checkbox("Account for gamma and linear space", &gui_use_gamma);
 		ImGui::DragFloat("SSAO radius", &ssao_radius, 0.01f, 1.0f, 20.0f);
