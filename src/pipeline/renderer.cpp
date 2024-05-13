@@ -39,7 +39,7 @@ Renderer::Renderer(const char* shader_atlas_filename)
 	skybox_cubemap = nullptr;
 	shadowmapAtlas = nullptr;
 	gBuffersFBO = nullptr;
-	deferred_fbo = nullptr;
+	linear_fbo = nullptr;
 	ssao_fbo = nullptr;
 	blurred_ssao = nullptr;
 
@@ -67,6 +67,16 @@ void Renderer::setupScene()
 	semitransparent_objects.clear();
 	opaque_objects.clear();
 	numShadowmaps = 0;
+
+	size = CORE::getWindowSize();
+	partial_render = true; //set to false when necessary on render scene methods (flat, forward, deferred)
+
+	if (!linear_fbo || prevScreenSize.distance(size) > 0.0) {
+		delete linear_fbo;
+		linear_fbo = new GFX::FBO();
+		linear_fbo->create(size.x, size.y, 1, GL_RGBA, GL_FLOAT, false);
+		linear_fbo->color_textures[0]->setName("DEFERRED RENDER");
+	}
 
 }
 
@@ -225,6 +235,8 @@ void Renderer::renderScene(SCN::Scene* scene, Camera* camera) {
 	setupScene();
 	categorizeNodes(camera);
 	std::sort(std::begin(semitransparent_objects), std::end(semitransparent_objects), compareDist);	//sort blending vector - sorts nodes by distance in descending order
+
+	//render to linear_fbo
 	switch (render_mode) {
 	case eRenderTypes::DEFERRED: //deferred rendering
 		renderSceneDeferred(scene, camera);
@@ -235,9 +247,39 @@ void Renderer::renderScene(SCN::Scene* scene, Camera* camera) {
 	default: //flat rendering
 		renderSceneFlat(scene, camera);
 	}
+
+	GFX::Mesh* quad = GFX::Mesh::getQuad();
+	//apply tonemapper or regular de-gamma
+	if (!partial_render) {
+		if (gui_use_tonemapper) {
+			GFX::Shader* tonemapper_shader = GFX::Shader::Get("tonemapper");
+			tonemapper_shader->enable();
+			tonemapper_shader->setUniform("u_texture", linear_fbo->color_textures[0], 0);
+			tonemapper_shader->setUniform("u_scale", tmp_scale);
+			tonemapper_shader->setUniform("u_average_lum", tmp_avg_lum);
+			tonemapper_shader->setUniform("u_lumwhite2", (float)pow(tmp_lumwhite, 2.0f));
+			tonemapper_shader->setUniform("u_inv_gamma", 1.0f / 2.2f);
+			quad->render(GL_TRIANGLES);
+			tonemapper_shader->disable();
+		}
+		else {
+			GFX::Shader* gamma_shader = GFX::Shader::Get("gamma");
+			gamma_shader->enable();
+			gamma_shader->setUniform("u_texture", linear_fbo->color_textures[0], 0);
+			gamma_shader->setUniform("u_inv_gamma", 1.0f / 2.2f);
+			quad->render(GL_TRIANGLES);
+			gamma_shader->disable();
+		}
+	}
+
+	//update screen size
+	prevScreenSize = size;
 }
 
 void Renderer::renderSceneFlat(SCN::Scene* scene, Camera* camera) {
+	
+	linear_fbo->bind();
+
 	glDisable(GL_BLEND);
 	glEnable(GL_DEPTH_TEST);
 
@@ -262,6 +304,9 @@ void Renderer::renderSceneFlat(SCN::Scene* scene, Camera* camera) {
 	{
 		renderNode(semitransparent_objects[i], camera, eRenderTypes::FLAT);
 	}
+
+	linear_fbo->unbind();
+	partial_render = false;
 }
 
 void Renderer::renderSceneForward(SCN::Scene* scene, Camera* camera)
@@ -269,7 +314,12 @@ void Renderer::renderSceneForward(SCN::Scene* scene, Camera* camera)
 	glDisable(GL_BLEND);
 	glEnable(GL_DEPTH_TEST);
 
-	//set the clear color (the background color)
+	generateShadowmaps(camera); //render shadowmap atlas
+	camera->enable(); //reactivate scene camera
+
+	linear_fbo->bind();
+
+		//set the clear color (the background color)
 	glClearColor(scene->background_color.x, scene->background_color.y, scene->background_color.z, 1.0);
 
 	// Clear the color and the depth buffer
@@ -277,11 +327,9 @@ void Renderer::renderSceneForward(SCN::Scene* scene, Camera* camera)
 	GFX::checkGLErrors();
 
 	//render skybox
-	if(skybox_cubemap)
+	if (skybox_cubemap)
 		renderSkybox(skybox_cubemap);
 
-	generateShadowmaps(camera); //render shadowmap atlas
-	camera->enable(); //reactivate scene camera
 	//render entities
 	for (int i = 0; i < opaque_objects.size(); i++)
 	{
@@ -292,6 +340,9 @@ void Renderer::renderSceneForward(SCN::Scene* scene, Camera* camera)
 	{
 		renderNode(semitransparent_objects[i], camera, eRenderTypes::FORWARD);
 	}
+
+	linear_fbo->unbind();
+	partial_render = false;
 }
 
 void Renderer::renderSceneDeferred(SCN::Scene* scene, Camera* camera) {
@@ -299,11 +350,10 @@ void Renderer::renderSceneDeferred(SCN::Scene* scene, Camera* camera) {
 	glEnable(GL_DEPTH_TEST);
 	glDepthFunc(GL_LESS);
 
-	vec2 size = CORE::getWindowSize();
 	if (!gBuffersFBO || prevScreenSize.distance(size) > 0.0) {
 		delete gBuffersFBO;
 		gBuffersFBO = new GFX::FBO();
-		gBuffersFBO->create(size.x, size.y, 3, GL_RGBA, GL_UNSIGNED_BYTE, true);
+		gBuffersFBO->create(size.x, size.y, 3, GL_RGBA, GL_FLOAT, true);
 	}
 	gBuffersFBO->bind();
 
@@ -431,24 +481,19 @@ void Renderer::renderSceneDeferred(SCN::Scene* scene, Camera* camera) {
 	//SSAO to viewport if necessary
 	if (deferred_display == eDeferredDisplay::SSAO_result) {
 		blurred_ssao->color_textures[0]->toViewport();
-		prevScreenSize = size; //update screen size to prevent textures getting destroyed each frame
 		return;
 	}
 
 	//deferred render to a FBO
-	//GFX::Texture* deferred_render = new GFX::Texture();
-	//deferred_render->bind();
-	if (!deferred_fbo || prevScreenSize.distance(size) > 0.0) {
-		delete deferred_fbo;
-		deferred_fbo = new GFX::FBO();
-		deferred_fbo->create(size.x, size.y, 1, GL_RGBA, GL_UNSIGNED_BYTE, true);
-		deferred_fbo->color_textures[0]->setName("DEFERRED RENDER");
-	}
-	deferred_fbo->bind();
+	linear_fbo->bind();
+
+	glClearColor(scene->background_color.x, scene->background_color.y, scene->background_color.z, 1.0);
+	glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
 
 	//render skybox
 	if (skybox_cubemap)
 		renderSkybox(skybox_cubemap);
+
 
 	GFX::Shader* deferred_global = GFX::Shader::Get("deferred_global");
 	deferred_global->enable();
@@ -538,25 +583,10 @@ void Renderer::renderSceneDeferred(SCN::Scene* scene, Camera* camera) {
 	{
 		renderNode(semitransparent_objects[i], camera, eRenderTypes::FORWARD);
 	}
-
 	glDisable(GL_BLEND);
-	deferred_fbo->unbind();
-	
-	//apply tonemapper or regular de-gamma
-	if (gui_use_tonemapper) {
 
-	}
-	else {
-		GFX::Shader* gamma_shader = GFX::Shader::Get("gamma");
-		gamma_shader->enable();
-		gamma_shader->setUniform("u_texture", deferred_fbo->color_textures[0], 0);
-		gamma_shader->setUniform("u_igamma", 1.0f / 2.2f);
-		quad->render(GL_TRIANGLES);
-		gamma_shader->disable();
-	}
-
-	//update screen size
-	prevScreenSize = size;
+	linear_fbo->unbind();
+	partial_render = false;
 }
 
 void Renderer::renderSkybox(GFX::Texture* cubemap)
@@ -1072,8 +1102,16 @@ void Renderer::showUI()
 		}
 		ImGui::Combo("Display channel", (int*)&deferred_display, "DEFAULT\0COLOR\0NORMALS\0MATERIAL_PROPERTIES\0DEPTH\0EMISSIVE\0SSAO_result\0");
 		ImGui::Combo("Occlusion mode", (int*)&occlusion_mode, "TEXTURE\0SSAO\0SSAOplus\0");
-		ImGui::Checkbox("Use tonemapper", &gui_use_tonemapper);
-		ImGui::DragFloat("SSAO radius", &ssao_radius, 0.01f, 1.0f, 20.0f);
+		ImGui::DragFloat("SSAO radius", &ssao_radius, 0.01f, 0.0f, 20.0f);
+	}
+	ImGui::Checkbox("Use tonemapper", &gui_use_tonemapper);
+	if (gui_use_tonemapper) {
+		if (ImGui::BeginCombo(" ", "Tonemapper properties")) {
+			ImGui::DragFloat("color scale", &tmp_scale, 0.005f, 0.0f, 2.0f);
+			ImGui::DragFloat("average lum", &tmp_avg_lum, 0.005f, 0.0f, 2.0f);
+			ImGui::DragFloat("lumwhite", &tmp_lumwhite, 0.005f, 0.0f, 2.0f);
+			ImGui::EndCombo();
+		}
 	}
 }
 

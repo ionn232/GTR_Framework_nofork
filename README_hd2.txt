@@ -29,11 +29,13 @@ blurring (tried using previous results, final version uses neighboring pixels)
 normal component (if normal is facing down occlusion is more intense)
 
 - linear space:
-todo
+implemented for all pipelines (deferred+forward+flat) (operations in linear space then converts to gamma for output)
+linear transformation for: texture color, emissive color, light colors, ambient color, OCCLUSION?¿?¿?
 
 - HDR and tonemapper:
 todo
 
-TODO: duda ajenjo: 
-visualizar gbuffers y emissive / 
-dithering cuenta nota si hemos hecho forward también?
+ajenjo seminar: 
+linear en color textura y luz, occlusion factor?
+linearizar valor bruto de la textura o (textura * u_color)? (igual para emissive)
+contar pixeles de fondo para blur? (enseñar arbol ssao)

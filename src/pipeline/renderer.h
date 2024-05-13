@@ -48,6 +48,7 @@ namespace SCN {
 	class Renderer
 	{
 	public:
+		//render options
 		bool render_wireframe;
 		bool render_boundaries;
 		bool gui_use_multipass = false;
@@ -59,20 +60,27 @@ namespace SCN {
 		bool gui_use_shadowmaps = true;
 		int gui_shadowmap_res = 1024;
 		bool gui_use_tonemapper = false;
+
+		//tonemapper parameters
+		float tmp_scale = 1.0f;
+		float tmp_avg_lum = 1.0f;
+		float tmp_lumwhite = 1.0f;
+
+		//program configurations
 		eRenderTypes render_mode = eRenderTypes::DEFERRED;
 		eDeferredDisplay deferred_display = eDeferredDisplay::DEFAULT;
 		eSSAO occlusion_mode = eSSAO::SSAOplus;
 
-		vec2 prevScreenSize = vec2(0.0, 0.0); //to detect if fbos must be rebuilt
-
 		GFX::Texture* skybox_cubemap;
 
+		//FBOs and configuration
 		GFX::FBO* shadowmapAtlas;
 		int prevAtlasSize = 0;
 		int numShadowmaps; //to avoid building an unnecesarily large atlas
 
 		GFX::FBO* gBuffersFBO;
-		GFX::FBO* deferred_fbo;
+
+		GFX::FBO* linear_fbo;
 
 		GFX::FBO* ssao_fbo; //current frame's occlusion
 		GFX::FBO* blurred_ssao; //occlusion results
@@ -80,9 +88,16 @@ namespace SCN {
 		std::vector<vec3> ssao_positions;
 		Matrix44 prevViewProj; //for temporal reprojection in SSAO
 
+		//scene container
 		SCN::Scene* scene;
 
-		//updated every frame
+		//window size
+		vec2 size;
+		vec2 prevScreenSize = vec2(0.0, 0.0); //to detect if fbos must be rebuilt
+
+		bool partial_render; //stop rendering at some intermediate point (to visualize gbuffers, ssao, etc.)
+
+
 		Renderer(const char* shaders_atlas_filename );
 
 		//just to be sure we have everything ready for the rendering
