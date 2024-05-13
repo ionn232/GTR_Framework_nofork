@@ -69,7 +69,7 @@ namespace SCN {
 		//program configurations
 		eRenderTypes render_mode = eRenderTypes::DEFERRED;
 		eDeferredDisplay deferred_display = eDeferredDisplay::DEFAULT;
-		eSSAO occlusion_mode = eSSAO::SSAOplus;
+		eSSAO occlusion_mode = eSSAO::TEXTURE;
 
 		GFX::Texture* skybox_cubemap;
 

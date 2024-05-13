@@ -39,3 +39,4 @@ ajenjo seminar:
 linear en color textura y luz, occlusion factor?
 linearizar valor bruto de la textura o (textura * u_color)? (igual para emissive)
 contar pixeles de fondo para blur? (enseñar arbol ssao)
+metallic/roughness usa metal_factor y rough_factor como emissive_factor? o solo textura?

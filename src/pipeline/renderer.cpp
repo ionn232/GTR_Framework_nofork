@@ -434,9 +434,9 @@ void Renderer::renderSceneDeferred(SCN::Scene* scene, Camera* camera) {
 
 		//render SSAO
 		quad->render(GL_TRIANGLES);
-		ssao_shader->disable();
 		//configure linear interpolation
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+		ssao_shader->disable();
 		ssao_fbo->unbind();
 
 		//blur image using reprojection (results did not look good, no time to fix)
@@ -471,8 +471,8 @@ void Renderer::renderSceneDeferred(SCN::Scene* scene, Camera* camera) {
 		ssao_blur_shader->setUniform("u_ssao_map", ssao_fbo->color_textures[0], 0);
 		ssao_blur_shader->setUniform("u_depth_texture", gBuffersFBO->depth_texture, 1);
 		int dimensions = 3;
-		ssao_shader->setUniform("u_blur_dimensions", dimensions);
-		ssao_shader->setUniform("u_invRes", invRes);
+		ssao_blur_shader->setUniform("u_blur_dimensions", dimensions);
+		ssao_blur_shader->setUniform("u_invRes", invRes);
 		glClear(GL_COLOR_BUFFER_BIT);
 		quad->render(GL_TRIANGLES);
 		blurred_ssao->unbind();
@@ -828,8 +828,8 @@ void Renderer::renderMeshWithMaterialLights(const Matrix44 model, GFX::Mesh* mes
 	shader->setUniform("u_time", t);
 	shader->setUniform("u_ambient_light", scene->ambient_light);
 	shader->setUniform("u_emissive_factor", material->emissive_factor);
-	shader->setUniform("u_metal_factor", 0.5f); //material->metallic_factor); //TODO quitar, es para debug
-	shader->setUniform("u_rough_factor", 0.5f); //material->roughness_factor);
+	shader->setUniform("u_metal_factor", material->metallic_factor);
+	shader->setUniform("u_rough_factor", material->roughness_factor);
 
 	shader->setUniform("u_color", material->color);
 
