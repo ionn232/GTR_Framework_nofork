@@ -20,7 +20,7 @@ Forward for alpha nodes
 Geometry instead of quads (point&spotlight)
 
 - PBR:
-TODO
+Enabled in deferred rendering, forward rendering keeps the previous implementation.
 
 - SSAO:
 SSAO
@@ -36,6 +36,12 @@ converts to linear when reading, FBOs formatted for higher quality
 Basic tonemapper from slides implemented. Configure from UI.
 
 
+
+- Changes to previous submissions:
+Reworked lightning in forward rendering (PBR is implemented in deferred) to correctly display shadows and spotlights.
+
+- Known issues:
+Because PBR is only implemented for deferred, semitransparent nodes (especially the car windows) look out of place when under high-intensity lights as they use forward rendering even when deferred mode is selected.
+
 TODO:
-refactor shadowmap atlas
 report

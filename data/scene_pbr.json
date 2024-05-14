@@ -17,14 +17,15 @@
 			"name":	"pointlight",
 			"layers":	3,
 			"position":	[277, 354, -50],
-			"scale":	[3, 3, 3],
-			"rotation":	[0, 0, 0, 1],
+			"scale":	[2.999896764755249, 2.9999358654022217, 2.9999997615814209],
+			"rotation":	[-0.21476104855537415, 0.80148732662200928, 0.214756652712822, 0.515146017074585],
 			"color":	[1, 1, 1],
-			"intensity":	1.3270000219345093,
+			"intensity":	1.7319999933242798,
 			"max_dist":	824,
 			"cast_shadows":	false,
 			"near_dist":	0.10000000149011612,
-			"light_type":	"POINT",
+			"area":	1000,
+			"light_type":	"DIRECTIONAL",
 			"type":	"LIGHT"
 		}]
 }

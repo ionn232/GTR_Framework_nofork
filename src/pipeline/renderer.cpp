@@ -954,8 +954,8 @@ void Renderer::renderMeshWithMaterialGBuffers(const Matrix44 model, GFX::Mesh* m
 
 	shader->setUniform("u_color", material->color);
 	shader->setUniform("u_emissive_factor", material->emissive_factor);
-	shader->setUniform("u_metal_factor", material->metallic_factor); //TODO ?
-	shader->setUniform("u_rough_factor", material->roughness_factor); //TODO ?
+	shader->setUniform("u_metal_factor", material->metallic_factor);
+	shader->setUniform("u_rough_factor", material->roughness_factor);
 
 	shader->setUniform("u_texture", texture, 0);
 	shader->setUniform("u_normalmap", normalMap, 1);

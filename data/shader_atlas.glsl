@@ -235,7 +235,7 @@ vec3 perturbNormal(vec3 N, vec3 WP, vec2 uv, vec3 normal_pixel)
 	return normalize(TBN * normal_pixel);
 }
 
-float computeShadow(vec3 wp, int i){
+float computeShadowSP(vec3 wp, int i){
 	//project our 3D position to the shadowmap
 	vec4 proj_pos = u_shadow_viewproj[i] * vec4(wp,1.0);
 
@@ -357,10 +357,10 @@ void main()
 				//shadow value
 				float shadow_factor = 1.0;
 				if (u_light_cast_shadows[i] == 1 && u_use_shadowmaps == 1) {
-					shadow_factor = computeShadow(v_world_position, i);
+					shadow_factor = computeShadowSP(v_world_position, i);
 				}
 
-				light += (NdotL * light_color) * att_factor * shadow_factor;
+				light += NdotL * light_color * att_factor * shadow_factor;
 
 				//specular value (blinn-phong)
 				if (u_use_specular == 1 && NdotL > 0.0) {
@@ -369,15 +369,7 @@ void main()
 					float final_a = 1-(spec_a * u_rough_factor);
 					float final_ks = spec_ks * u_metal_factor;
 
-					float cos_angle = dot(u_light_front[i], L);
-					if (cos_angle < u_cone_info[i].y) {
-						NdotH = 0;
-					}
-					else if (cos_angle < u_cone_info[i].x) {
-						NdotH *= (cos_angle - u_cone_info[i].y) / (u_cone_info[i].x - u_cone_info[i].y);
-					}
-
-					if (final_a != 0) {light += final_ks * pow(NdotH, final_a) * light_color * att_factor; }
+					if (final_a != 0) {light += NdotL * final_ks * pow(NdotH, final_a) * light_color * att_factor * shadow_factor; }
 				}
 			}
 			else if (u_light_type[i] == 3) {		//directional lights
@@ -389,7 +381,7 @@ void main()
 				//shadow value
 				float shadow_factor = 1.0;
 				if (u_light_cast_shadows[i] == 1 && u_use_shadowmaps == 1) {
-					shadow_factor = computeShadow(v_world_position, i);
+					shadow_factor = computeShadowSP(v_world_position, i);
 				}
 				light += NdotL * light_color * shadow_factor;
 
@@ -399,7 +391,7 @@ void main()
 					float NdotH = clamp(dot(N, H), 0.0, 1.0);
 					float final_a = 1-(spec_a * u_rough_factor);
 					float final_ks = spec_ks * u_metal_factor;
-					if (final_a != 0) {light += final_ks * pow(NdotH, final_a) * light_color; }
+					if (final_a != 0) {light += final_ks * pow(NdotH, final_a) * light_color * shadow_factor; }
 				}
 			}
 		}
@@ -494,7 +486,7 @@ vec3 perturbNormal(vec3 N, vec3 WP, vec2 uv, vec3 normal_pixel)
 	return normalize(TBN * normal_pixel);
 }
 
-float computeShadow(vec3 wp){
+float computeShadowMP(vec3 wp){
 	//project our 3D position to the shadowmap
 	vec4 proj_pos = u_shadow_viewproj * vec4(wp,1.0);
 
@@ -601,7 +593,7 @@ void main()
 		//shadow value
 		float shadow_factor = 1.0;
 		if (u_light_cast_shadows == 1 && u_use_shadowmaps == 1) {
-			shadow_factor = computeShadow(v_world_position);
+			shadow_factor = computeShadowMP(v_world_position);
 		}
 
 		light += (NdotL * light_color) * att_factor * shadow_factor;
@@ -613,15 +605,7 @@ void main()
 			float final_a = 1-(spec_a * u_rough_factor);
 			float final_ks = spec_ks * u_metal_factor;
 
-			float cos_angle = dot(u_light_front, L);
-			if (cos_angle < u_cone_info.y) {
-				NdotH = 0;
-			}
-			else if (cos_angle < u_cone_info.x) {
-				NdotH *= (cos_angle - u_cone_info.y) / (u_cone_info.x - u_cone_info.y);
-			}
-
-			if (final_a != 0) {light += final_ks * pow(NdotH, final_a) * light_color * att_factor; }
+			if (final_a != 0) {light += NdotL * final_ks * pow(NdotH, final_a) * light_color * att_factor * shadow_factor; }
 		}
 	}
 	else if (u_light_type == 3) {		//directional lights
@@ -633,7 +617,7 @@ void main()
 		//shadow value
 		float shadow_factor = 1.0;
 		if (u_light_cast_shadows == 1 && u_use_shadowmaps == 1) {
-			shadow_factor = computeShadow(v_world_position);
+			shadow_factor = computeShadowMP(v_world_position);
 		}
 
 		light += NdotL * light_color * shadow_factor;
@@ -644,7 +628,7 @@ void main()
 			float NdotH = clamp(dot(N, H), 0.0, 1.0);
 			float final_a = 1-(spec_a * u_rough_factor);
 			float final_ks = spec_ks * u_metal_factor;
-			if (final_a != 0) {light += final_ks * pow(NdotH, final_a) * light_color; }
+			if (final_a != 0) {light += final_ks * pow(NdotH, final_a) * light_color * shadow_factor; }
 		}
 	}
 	else if (u_light_type == 4) {		//ambient light (first pass)
@@ -725,7 +709,7 @@ void main()
 	vec3 colorTexture = color.xyz;
 
 	float occlusion = texture(u_metal_roughness, uv).x;
-	float shininess =  1 - (texture(u_metal_roughness, uv).b * u_rough_factor);
+	float shininess =  1.0 - (texture(u_metal_roughness, uv).b * u_rough_factor);
 	float metalness = texture(u_metal_roughness, uv).g * u_metal_factor;
 
 	if(color.a < u_alpha_cutoff)
@@ -754,6 +738,9 @@ void main()
 \deferred_global.fs
 
 #version 330 core
+
+#define RECIPROCAL_PI 0.3183098861837697
+#define PI 3.1416
 
 in vec3 v_position;
 in vec2 v_uv;
@@ -797,7 +784,70 @@ uniform int u_occlusion_type;
 
 out vec4 FragColor;
 
-float computeShadow(vec3 wp){
+// Normal Distribution Function using GGX Distribution
+float D_GGX (const in float NoH, const in float linearRoughness )
+{
+	float a2 = linearRoughness * linearRoughness;
+	float f = (NoH * NoH) * (a2 - 1.0) + 1.0;
+	return a2 / (PI * f * f);
+}
+
+// Fresnel term with scalar optimization(f90=1)
+float F_Schlick( const in float VoH, const in float f0)
+{
+	float f = pow(1.0 - VoH, 5.0);
+	return f0 + (1.0 - f0) * f;
+}
+
+// Fresnel term with colorized fresnel
+vec3 F_Schlick( const in float VoH, const in vec3 f0)
+{
+	float f = pow(1.0 - VoH, 5.0);
+	return f0 + (vec3(1.0) - f0) * f;
+}
+
+// Geometry Term: Geometry masking/shadowing due to microfacets
+float GGX(float NdotV, float k){
+	return NdotV / (NdotV * (1.0 - k) + k);
+}
+	
+float G_Smith( float NdotV, float NdotL, float roughness)
+{
+	float k = pow(roughness + 1.0, 2.0) / 8.0;
+	return GGX(NdotL, k) * GGX(NdotV, k);
+}
+
+// Diffuse Reflections: Disney BRDF using retro-reflections using F term, this is much more complex!!
+// might be doing something wrong w/linear roughness but this looks like shit
+float Fd_Burley ( const in float NoV, const in float NoL, const in float LoH, const in float linearRoughness)
+{
+        float f90 = 0.5 + 2.0 * linearRoughness * LoH * LoH;
+        float lightScatter = F_Schlick(NoL, f90);
+        float viewScatter  = F_Schlick(NoV, f90);
+        return lightScatter * viewScatter * RECIPROCAL_PI;
+}
+
+vec3 specularBRDF( float roughness, vec3 f0, float NoH, float NoV, float NoL, float LoH )
+{
+	float a = roughness * roughness;
+
+	// Normal Distribution Function
+	float D = D_GGX( NoH, a );
+
+	// Fresnel Function
+	vec3 F = F_Schlick( LoH, f0 );
+
+	// Visibility Function (shadowing/masking)
+	float G = G_Smith( NoV, NoL, roughness );
+		
+	// Norm factor
+	vec3 spec = D * G * F;
+	spec /= (4.0 * NoL * NoV + 1e-6);
+
+	return spec;
+}
+
+float computeShadowMP(vec3 wp){
 	//project our 3D position to the shadowmap
 	vec4 proj_pos = u_shadow_viewproj * vec4(wp,1.0);
 
@@ -861,89 +911,91 @@ void main()
 	vec3 light_color =  pow(u_light_col, vec3(2.2));
 	vec3 ambient_light = pow(u_ambient_light, vec3(2.2));
 
-	if (u_light_type == 1) { 		//point lights
-		//diffuse value
-		vec3 L = u_light_pos - worldpos;
-		L= normalize(L);
-		float NdotL = clamp(dot(N, L), 0.0, 1.0);
-		
-		float lightDist = distance(u_light_pos, worldpos);
-		float att_factor = u_max_distance - lightDist;
-		att_factor = att_factor/u_max_distance;
-		att_factor = max(att_factor, 0.0);
-
-		light += (NdotL * light_color) * att_factor;
-
-		//specular value (blinn-phong)
-		if (NdotL > 0.0) {
-			vec3 H = normalize(L + V);
-			float NdotH = clamp(dot(N, H), 0.0, 1.0);
-			if (shininess != 0) {light += metalness * pow(NdotH, shininess) * light_color * att_factor; }
-		}
-	}
-	else if (u_light_type == 2) { 		//spot lights
-		//diffuse value
-		vec3 L = u_light_pos - worldpos;
-		L= normalize(L);
-		float NdotL = clamp(dot(N, L), 0.0, 1.0);
-		
-		float lightDist = distance(u_light_pos, worldpos);
-		float att_factor = u_max_distance - lightDist;
-		att_factor = att_factor/u_max_distance;
-		att_factor = max(att_factor, 0.0);
-
-		float cos_angle = dot(u_light_front, L);
-		if (cos_angle < u_cone_info.y) {
-			NdotL = 0.0;
-		}
-		else if (cos_angle < u_cone_info.x) {
-			NdotL *= (cos_angle - u_cone_info.y) / (u_cone_info.x - u_cone_info.y);
-		}
-
-		//shadow value
+	if (u_light_type == 1 || u_light_type == 2) { 		//point lights and spot lights
+		//shadow factor initialization
 		float shadow_factor = 1.0;
-		if (u_light_cast_shadows == 1) {
-			shadow_factor = computeShadow(worldpos);
-		}
+		
+		//get vectors
+		vec3 L = u_light_pos - worldpos;
+		L= normalize(L);
+		vec3 H = normalize(L + V);
+		float NdotL = clamp(dot(N, L), 0.0, 1.0);
+		float NdotH = dot(N, H);
+		float NdotV = dot(N, V);
+		float LdotH = dot(L, H);
 
-		light += (NdotL * light_color) * att_factor * shadow_factor;
-
-		//specular value (blinn-phong)
-		if (NdotL > 0.0) {
-			vec3 H = normalize(L + V);
-			float NdotH = clamp(dot(N, H), 0.0, 1.0);
-
+		//correction for spotlights
+		float spotlight_attenuation = 1.0;
+		if (u_light_type == 2) {
 			float cos_angle = dot(u_light_front, L);
 			if (cos_angle < u_cone_info.y) {
-				NdotH = 0;
+				spotlight_attenuation = 0.0;
 			}
 			else if (cos_angle < u_cone_info.x) {
-				NdotH *= (cos_angle - u_cone_info.y) / (u_cone_info.x - u_cone_info.y);
+				spotlight_attenuation = (cos_angle - u_cone_info.y) / (u_cone_info.x - u_cone_info.y);
 			}
-
-			if (shininess != 0) {light += metalness * pow(NdotH, shininess) * light_color * att_factor; }
+		//shadow factor
+			if (u_light_cast_shadows == 1) {
+				shadow_factor = computeShadowMP(worldpos);
+			}
 		}
+		
+		//we compute the reflection in base to the color and the metalness
+		vec3 f0 = mix( vec3(0.5), color, metalness );
+
+		//metallic materials do not have diffuse
+		vec3 diffuseColor = (1.0 - metalness) * color;
+
+		//specular value
+		vec3 Fr_d = specularBRDF((1.0-shininess), f0, NdotH, NdotV, NdotL, LdotH);
+		
+		//diffuse value
+		vec3 Fd_d = diffuseColor * NdotL;
+		
+		//add diffuse and specular reflection
+		vec3 direct = Fd_d + Fr_d;
+
+		//attenuation factor
+		float lightDist = distance(u_light_pos, worldpos);
+		float att_factor = u_max_distance - lightDist;
+		att_factor = att_factor/u_max_distance;
+		att_factor = max(att_factor, 0.0);
+
+		//final light computation
+		light += direct * att_factor * shadow_factor * light_color * spotlight_attenuation;
 	}
 	else if (u_light_type == 3) {		//directional lights
-		//diffuse value
+		//get vectors
 		vec3 L = u_light_front;
 		L = normalize(L);
+		vec3 H = normalize(L + V);
 		float NdotL = clamp(dot(N, L), 0.0, 1.0);
+		float NdotH = dot(N, H);
+		float NdotV = dot(N, V);
+		float LdotH = dot(L, H);
 
-		//shadow value
 		float shadow_factor = 1.0;
 		if (u_light_cast_shadows == 1) {
-			shadow_factor = computeShadow(worldpos);
+			shadow_factor = computeShadowMP(worldpos);
 		}
 
-		light += NdotL * light_color * shadow_factor;
+		//we compute the reflection in base to the color and the metalness
+		vec3 f0 = mix( vec3(0.5), color, metalness );
 
-		//specular value (blinn-phong)
-		if (NdotL > 0.0) {
-			vec3 H = normalize(L + V);
-			float NdotH = clamp(dot(N, H), 0.0, 1.0);
-			if (shininess != 0) {light += metalness * pow(NdotH, shininess) * light_color; }
-		}
+		//metallic materials do not have diffuse
+		vec3 diffuseColor = (1.0 - metalness) * color;
+
+		//specular value
+		vec3 Fr_d = specularBRDF((1.0-shininess), f0, NdotH, NdotV, NdotL, LdotH);
+		
+		//diffuse value
+		vec3 Fd_d = diffuseColor * NdotL;
+		
+		//add diffuse and specular reflection
+		vec3 direct = Fr_d + Fd_d;
+
+		//final light computation
+		light += direct * shadow_factor * light_color;
 	}
 	else if (u_light_type == 4) {	//ambient light
 		//occlusion from texture
@@ -1338,7 +1390,7 @@ void main() {
 
 	rgb = (rgb / lum) * Ld;
 	rgb = max(rgb,vec3(0.001));
-	
+
 	//linear to gamma
 	rgb = pow( rgb, vec3( u_inv_gamma ) );
 	gl_FragColor = vec4( rgb, color.a );
