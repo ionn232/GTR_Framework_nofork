@@ -575,7 +575,7 @@ void main()
 			vec3 H = normalize(L + V);
 			float NdotH = clamp(dot(N, H), 0.0, 1.0);
 			float final_a = 1-(spec_a * u_rough_factor);
-			float final_ks = spec_ks * u_metal_factor;
+			float final_ks = spec_ks * u_metal_factor; 
 			if (final_a != 0) {light += final_ks * pow(NdotH, final_a) * light_color * att_factor; }
 		}
 	}
@@ -682,6 +682,8 @@ uniform int u_use_normalmap; //avoids visual bugs when perturbing a normal when 
 uniform sampler2D u_emissive;
 
 uniform vec3 u_emissive_factor;
+uniform float u_metal_factor;
+uniform float u_rough_factor;
 
 layout(location = 0) out vec4 FragColor;
 layout(location = 1) out vec4 NormalColor;
@@ -718,10 +720,13 @@ vec3 perturbNormal(vec3 N, vec3 WP, vec2 uv, vec3 normal_pixel)
 void main()
 {
 	vec2 uv = v_uv;
-	vec4 color = u_color * texture( u_texture, uv );
-	color.xyz = pow(color.xyz, vec3(2.2));
+	vec4 color = u_color * texture( u_texture, uv ); //TODO linearize both components before operating (no effective result as u_color is always (1,1,1,1) but just in case another scene is used)
+	color.xyz = pow(color.xyz, vec3(2.2)); 
 	vec3 colorTexture = color.xyz;
-	vec3 material_properties = texture(u_metal_roughness, uv).xyz;
+
+	float occlusion = texture(u_metal_roughness, uv).x;
+	float shininess =  1 - (texture(u_metal_roughness, uv).b * u_rough_factor);
+	float metalness = texture(u_metal_roughness, uv).g * u_metal_factor;
 
 	if(color.a < u_alpha_cutoff)
 		discard;
@@ -740,7 +745,9 @@ void main()
 	NormalColor.xyz = N * 0.5 + vec3(0.5);
 	NormalColor.w = emissive_pixel.g;
 
-	MaterialProperties.xyz = material_properties;
+	MaterialProperties.x = occlusion;
+	MaterialProperties.y = metalness;
+	MaterialProperties.z = shininess;
 	MaterialProperties.w = emissive_pixel.b;
 }
 
@@ -762,9 +769,6 @@ uniform mat4 u_inverse_viewprojection;
 uniform vec3 u_ambient_light;
 
 uniform vec3 u_camera_position;
-
-uniform float u_metal_factor;
-uniform float u_rough_factor;
 
 uniform vec3 u_light_pos;
 uniform vec3 u_light_front;
@@ -839,8 +843,8 @@ void main()
 	float depth = texture(u_depth_texture, uv).x;
 	vec3 N = texture(u_normal_texture, uv).xyz * 2.0 - vec3(1.0);
 	N = normalize(N);
-	float spec_ks = texture( u_mat_properties_texture, uv).g;
-	float spec_a =  texture( u_mat_properties_texture, uv).b;
+	float metalness = texture( u_mat_properties_texture, uv).g;
+	float shininess =  texture( u_mat_properties_texture, uv).b;
 
 	if(depth == 1.0) {
 		discard;
@@ -874,9 +878,7 @@ void main()
 		if (NdotL > 0.0) {
 			vec3 H = normalize(L + V);
 			float NdotH = clamp(dot(N, H), 0.0, 1.0);
-			float final_a = 1-(spec_a * u_rough_factor);
-			float final_ks = spec_ks * u_metal_factor;
-			if (final_a != 0) {light += final_ks * pow(NdotH, final_a) * light_color * att_factor; }
+			if (shininess != 0) {light += metalness * pow(NdotH, shininess) * light_color * att_factor; }
 		}
 	}
 	else if (u_light_type == 2) { 		//spot lights
@@ -910,8 +912,6 @@ void main()
 		if (NdotL > 0.0) {
 			vec3 H = normalize(L + V);
 			float NdotH = clamp(dot(N, H), 0.0, 1.0);
-			float final_a = 1-(spec_a * u_rough_factor);
-			float final_ks = spec_ks * u_metal_factor;
 
 			float cos_angle = dot(u_light_front, L);
 			if (cos_angle < u_cone_info.y) {
@@ -921,7 +921,7 @@ void main()
 				NdotH *= (cos_angle - u_cone_info.y) / (u_cone_info.x - u_cone_info.y);
 			}
 
-			if (final_a != 0) {light += final_ks * pow(NdotH, final_a) * light_color * att_factor; }
+			if (shininess != 0) {light += metalness * pow(NdotH, shininess) * light_color * att_factor; }
 		}
 	}
 	else if (u_light_type == 3) {		//directional lights
@@ -942,9 +942,7 @@ void main()
 		if (NdotL > 0.0) {
 			vec3 H = normalize(L + V);
 			float NdotH = clamp(dot(N, H), 0.0, 1.0);
-			float final_a = 1-(spec_a * u_rough_factor);
-			float final_ks = spec_ks * u_metal_factor;
-			if (final_a != 0) {light += final_ks * pow(NdotH, final_a) * light_color; }
+			if (shininess != 0) {light += metalness * pow(NdotH, shininess) * light_color; }
 		}
 	}
 	else if (u_light_type == 4) {	//ambient light
@@ -1073,7 +1071,7 @@ void main() {
 	vec3 down_vector = vec3(0.0,-1.0,0.0);
 	float extra_shading_factor = dot(N, down_vector);
 	if (extra_shading_factor > 0.0) {
-		occlusion_factor *= (1.0 - extra_shading_factor);
+		occlusion_factor *= (1.0 - extra_shading_factor * 0.95);
 	}
 
 	FragColor.xyz = vec3(occlusion_factor);
@@ -1340,6 +1338,8 @@ void main() {
 
 	rgb = (rgb / lum) * Ld;
 	rgb = max(rgb,vec3(0.001));
+	
+	//linear to gamma
 	rgb = pow( rgb, vec3( u_inv_gamma ) );
 	gl_FragColor = vec4( rgb, color.a );
 }

@@ -518,10 +518,6 @@ void Renderer::renderSceneDeferred(SCN::Scene* scene, Camera* camera) {
 	deferred_global->setUniform("u_shadowmap", shadowmapAtlas->depth_texture, 8);
 	deferred_global->setUniform("u_shadowmap_dimensions", getSMapdDimensions(numShadowmaps));
 
-	//TODO: METAL FACTOR AND ROUGH FACTOR DE CADA MATERIAL (pre-computar finals en gbuffer shader)
-	deferred_global->setUniform("u_metal_factor", 0.5f);
-	deferred_global->setUniform("u_rough_factor", 0.5f);
-
 	//initial pass (color + ambient + emissive + occlusion)
 	glEnable(GL_DEPTH_TEST);
 	glDepthFunc(GL_ALWAYS);

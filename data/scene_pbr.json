@@ -1,0 +1,30 @@
+{
+	"background_color":	[0.00999999977648258, 0.00999999977648258, 0.10000000149011612],
+	"ambient_light":	[0.63235294818878174, 0.63235294818878174, 0.63235294818878174],
+	"camera_position":	[-300, 90, -150],
+	"camera_target":	[0, 40, 0],
+	"camera_fov":	60,
+	"skybox":	"night.hdre",
+	"entities":	[{
+			"name":	"test",
+			"layers":	3,
+			"position":	[0, 0, 0],
+			"scale":	[40, 40, 40],
+			"rotation":	[0, 0, 0, 1],
+			"filename":	"prefabs/test_pbr.glb",
+			"type":	"PREFAB"
+		}, {
+			"name":	"pointlight",
+			"layers":	3,
+			"position":	[277, 354, -50],
+			"scale":	[3, 3, 3],
+			"rotation":	[0, 0, 0, 1],
+			"color":	[1, 1, 1],
+			"intensity":	1.3270000219345093,
+			"max_dist":	824,
+			"cast_shadows":	false,
+			"near_dist":	0.10000000149011612,
+			"light_type":	"POINT",
+			"type":	"LIGHT"
+		}]
+}
