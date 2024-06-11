@@ -4,7 +4,7 @@
 
 #include "light.h"
 
-#define MAX_LIGHTS_SP 15
+#define MAX_LIGHTS_SP 25
 
 //forward declarations
 class Camera;
@@ -84,7 +84,7 @@ namespace SCN {
 
 		GFX::FBO* ssao_fbo; //current frame's occlusion
 		GFX::FBO* blurred_ssao; //occlusion results
-		float ssao_radius = 10.0f;
+		float ssao_radius = 7.0f;
 		std::vector<vec3> ssao_positions;
 		Matrix44 prevViewProj; //for temporal reprojection in SSAO
 

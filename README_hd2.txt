@@ -7,7 +7,7 @@ FragColor (xyz) --> texture color
 NormalColor (xyz) --> normals
 MaterialProperties (x) --> occlusion
 MaterialProperties (y) --> metalness
-MaterialProperties (z) --> shininess (inverse roughness)
+MaterialProperties (z) --> shininess
 FragColor (w) --> emissive red component
 NormalColor (w) --> emissive green component
 MaterialProperties (w) --> emissive blue component
@@ -43,5 +43,11 @@ Reworked lightning in forward rendering (PBR is implemented in deferred) to corr
 - Known issues:
 Because PBR is only implemented for deferred, semitransparent nodes (especially the car windows) look out of place when under high-intensity lights as they use forward rendering even when deferred mode is selected.
 
-TODO:
-report
+
+
+- new render options:
+Render mode:		Select rendering pipeline (flat, forward, deferred)
+Display channel:	Visualize something other than the final render in the deferred pipeline (Gbuffer values, SSAO, depth)
+SSAO radius:		Sphere radius for generating the random points used in SSAO.
+Use tonemapper:		Enable tonemapper. Default values don't change the render in respect to just gamma pass.
+Tonemapper properties:	Sliders for each of the tonemapper components.

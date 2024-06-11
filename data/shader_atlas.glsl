@@ -153,7 +153,7 @@ void main()
 
 #version 330 core
 
-const int MAX_LIGHTS = 15;
+const int MAX_LIGHTS = 25;
 in vec3 v_position;
 in vec3 v_world_position;
 in vec3 v_normal;

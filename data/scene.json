@@ -367,5 +367,126 @@
 			"rotation":	[7.69139660405926e-07, 0.92447942495346069, 7.69139546719089e-07, 0.381231814622879],
 			"filename":	"prefabs/tree.glb",
 			"type":	"PREFAB"
+		}
+		, {
+			"name":	"pointlight",
+			"layers":	3,
+			"position":	[44, 34, 717],
+			"scale":	[1, 1, 1],
+			"rotation":	[0, 0, 0, 1],
+			"color":	[1, 0.68235290050506592, 0.100000023841858],
+			"intensity":	2.5,
+			"max_dist":	70,
+			"cast_shadows":	false,
+			"near_dist":	0.10000000149011612,
+			"light_type":	"POINT",
+			"type":	"LIGHT"
+		}
+		, {
+			"name":	"pointlight",
+			"layers":	3,
+			"position":	[44, 34, 717],
+			"scale":	[1, 1, 1],
+			"rotation":	[0, 0, 0, 1],
+			"color":	[1, 0.68235290050506592, 0.100000023841858],
+			"intensity":	2.5,
+			"max_dist":	70,
+			"cast_shadows":	false,
+			"near_dist":	0.10000000149011612,
+			"light_type":	"POINT",
+			"type":	"LIGHT"
+		}
+		, {
+			"name":	"pointlight",
+			"layers":	3,
+			"position":	[44, 34, 717],
+			"scale":	[1, 1, 1],
+			"rotation":	[0, 0, 0, 1],
+			"color":	[1, 0.68235290050506592, 0.100000023841858],
+			"intensity":	2.5,
+			"max_dist":	70,
+			"cast_shadows":	false,
+			"near_dist":	0.10000000149011612,
+			"light_type":	"POINT",
+			"type":	"LIGHT"
+		}
+		, {
+			"name":	"pointlight",
+			"layers":	3,
+			"position":	[44, 34, 717],
+			"scale":	[1, 1, 1],
+			"rotation":	[0, 0, 0, 1],
+			"color":	[1, 0.68235290050506592, 0.100000023841858],
+			"intensity":	2.5,
+			"max_dist":	70,
+			"cast_shadows":	false,
+			"near_dist":	0.10000000149011612,
+			"light_type":	"POINT",
+			"type":	"LIGHT"
+		}, {
+			"name":	"pointlight",
+			"layers":	3,
+			"position":	[44, 34, 717],
+			"scale":	[1, 1, 1],
+			"rotation":	[0, 0, 0, 1],
+			"color":	[1, 0.68235290050506592, 0.100000023841858],
+			"intensity":	2.5,
+			"max_dist":	70,
+			"cast_shadows":	false,
+			"near_dist":	0.10000000149011612,
+			"light_type":	"POINT",
+			"type":	"LIGHT"
+		}, {
+			"name":	"pointlight",
+			"layers":	3,
+			"position":	[44, 34, 717],
+			"scale":	[1, 1, 1],
+			"rotation":	[0, 0, 0, 1],
+			"color":	[1, 0.68235290050506592, 0.100000023841858],
+			"intensity":	2.5,
+			"max_dist":	70,
+			"cast_shadows":	false,
+			"near_dist":	0.10000000149011612,
+			"light_type":	"POINT",
+			"type":	"LIGHT"
+		}, {
+			"name":	"pointlight",
+			"layers":	3,
+			"position":	[44, 34, 717],
+			"scale":	[1, 1, 1],
+			"rotation":	[0, 0, 0, 1],
+			"color":	[1, 0.68235290050506592, 0.100000023841858],
+			"intensity":	2.5,
+			"max_dist":	70,
+			"cast_shadows":	false,
+			"near_dist":	0.10000000149011612,
+			"light_type":	"POINT",
+			"type":	"LIGHT"
+		}, {
+			"name":	"pointlight",
+			"layers":	3,
+			"position":	[44, 34, 717],
+			"scale":	[1, 1, 1],
+			"rotation":	[0, 0, 0, 1],
+			"color":	[1, 0.68235290050506592, 0.100000023841858],
+			"intensity":	2.5,
+			"max_dist":	70,
+			"cast_shadows":	false,
+			"near_dist":	0.10000000149011612,
+			"light_type":	"POINT",
+			"type":	"LIGHT"
+		}, {
+			"name":	"pointlight",
+			"layers":	3,
+			"position":	[44, 34, 717],
+			"scale":	[1, 1, 1],
+			"rotation":	[0, 0, 0, 1],
+			"color":	[1, 0.68235290050506592, 0.100000023841858],
+			"intensity":	2.5,
+			"max_dist":	70,
+			"cast_shadows":	false,
+			"near_dist":	0.10000000149011612,
+			"light_type":	"POINT",
+			"type":	"LIGHT"
 		}]
 }

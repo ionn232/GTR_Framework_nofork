@@ -420,7 +420,6 @@ void Renderer::renderSceneDeferred(SCN::Scene* scene, Camera* camera) {
 		glDisable(GL_BLEND);
 		//upload necessary shader uniforms
 		//IDEA: range check (diapos)
-		//IDEA: account for normal to shade downward surfaces
 		GFX::Shader* ssao_shader = GFX::Shader::Get("ssao");
 		ssao_shader->enable();
 		ssao_shader->setUniform("u_depth_texture", gBuffersFBO->depth_texture, 0);
