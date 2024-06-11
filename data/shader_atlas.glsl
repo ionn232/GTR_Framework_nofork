@@ -261,7 +261,7 @@ float computeShadowSP(vec3 wp, int i){
 
 	//read depth from depth buffer in [0..+1] non-linear
 	//accounts for offset using shadowmap dimensions and id
-	float shadow_depth = texture( u_shadowmap, vec2(shadow_uv.x*(1.0/u_shadowmap_dimensions)+(1.0/u_shadowmap_dimensions)*(u_shadowmap_index[i]%u_shadowmap_dimensions),	 shadow_uv.y*(1.0/u_shadowmap_dimensions)+(1.0/u_shadowmap_dimensions)*floor(u_shadowmap_index[i]/u_shadowmap_dimensions))).x;
+	float shadow_depth = texture( u_shadowmap, vec2(shadow_uv.x*(1.0/u_shadowmap_dimensions)+(1.0/u_shadowmap_dimensions)*(u_shadowmap_index[i]%u_shadowmap_dimensions),	 shadow_uv.y*(1.0/u_shadowmap_dimensions)+(1.0/u_shadowmap_dimensions)*floor(float(u_shadowmap_index[i])/float(u_shadowmap_dimensions)))).x;
 
 	//compute final shadow factor by comparing
 	float shadow_factor = 1.0;
@@ -512,7 +512,7 @@ float computeShadowMP(vec3 wp){
 
 	//read depth from depth buffer in [0..+1] non-linear
 	//accounts for offset using shadowmap dimensions and id
-	float shadow_depth = texture( u_shadowmap, vec2(shadow_uv.x*(1.0/u_shadowmap_dimensions)+(1.0/u_shadowmap_dimensions)*(u_shadowmap_index%u_shadowmap_dimensions),	 shadow_uv.y*(1.0/u_shadowmap_dimensions)+(1.0/u_shadowmap_dimensions)*floor(u_shadowmap_index/u_shadowmap_dimensions))).x;
+	float shadow_depth = texture( u_shadowmap, vec2(shadow_uv.x*(1.0/u_shadowmap_dimensions)+(1.0/u_shadowmap_dimensions)*(u_shadowmap_index%u_shadowmap_dimensions),	 shadow_uv.y*(1.0/u_shadowmap_dimensions)+(1.0/u_shadowmap_dimensions)*floor(float(u_shadowmap_index)/float(u_shadowmap_dimensions)))).x;
 
 	//compute final shadow factor by comparing
 	float shadow_factor = 1.0;
@@ -873,7 +873,7 @@ float computeShadowMP(vec3 wp){
 
 	//read depth from depth buffer in [0..+1] non-linear
 	//accounts for offset using shadowmap dimensions and id
-	float shadow_depth = texture( u_shadowmap, vec2(shadow_uv.x*(1.0/u_shadowmap_dimensions)+(1.0/u_shadowmap_dimensions)*(u_shadowmap_index%u_shadowmap_dimensions),	 shadow_uv.y*(1.0/u_shadowmap_dimensions)+(1.0/u_shadowmap_dimensions)*floor(u_shadowmap_index/u_shadowmap_dimensions))).x;
+	float shadow_depth = texture( u_shadowmap, vec2(shadow_uv.x*(1.0/u_shadowmap_dimensions)+(1.0/u_shadowmap_dimensions)*(u_shadowmap_index%u_shadowmap_dimensions),	 shadow_uv.y*(1.0/u_shadowmap_dimensions)+(1.0/u_shadowmap_dimensions)*floor(float(u_shadowmap_index)/float(u_shadowmap_dimensions)))).x;
 
 	//compute final shadow factor by comparing
 	float shadow_factor = 1.0;
