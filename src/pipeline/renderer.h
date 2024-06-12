@@ -79,7 +79,8 @@ namespace SCN {
 		bool gui_use_shadowmaps = true;
 		int gui_shadowmap_res = 1024;
 		bool gui_use_tonemapper = true;
-		bool use_irradiance = false; //once the probes have been cached once this will activate
+		bool use_irradiance = false;
+		bool show_probes = false;
 
 		//tonemapper parameters
 		float tmp_scale = 1.0f;

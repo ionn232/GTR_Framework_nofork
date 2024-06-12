@@ -623,13 +623,15 @@ void Renderer::renderSceneDeferred(SCN::Scene* scene, Camera* camera) {
 	}
 	glDisable(GL_BLEND);
 
-	//TODO mejorar opcion UI
-	//if (use_irradiance) {
-	//	renderAllProbes(1.0f);
-	//}
-
 	//irradiance pass
-	if (probes_texture) {
+	if (probes_texture && use_irradiance) {
+		glEnable(GL_BLEND);
+		glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+
+		glEnable(GL_DEPTH_TEST);
+		glDepthFunc(GL_LEQUAL);
+		glDepthMask(false);
+
 		GFX::Shader* irradiance_shader = GFX::Shader::Get("irradiance");
 		irradiance_shader->enable();
 
@@ -641,7 +643,7 @@ void Renderer::renderSceneDeferred(SCN::Scene* scene, Camera* camera) {
 		irradiance_shader->setUniform("u_irr_dims", probes_info.dim);
 		irradiance_shader->setUniform("u_irr_delta", probes_info.delta);
 		irradiance_shader->setUniform("u_num_probes", probes_info.num_probes);
-		irradiance_shader->setUniform("u_irr_normal_distance", 0.0f); //TODO espabila
+		irradiance_shader->setUniform("u_irr_normal_distance", 5.0f); //TODO espabila
 
 		irradiance_shader->setUniform("u_color_texture", gBuffersFBO->color_textures[0], 0);
 		irradiance_shader->setUniform("u_normal_texture", gBuffersFBO->color_textures[1], 1);
@@ -653,6 +655,17 @@ void Renderer::renderSceneDeferred(SCN::Scene* scene, Camera* camera) {
 		irradiance_shader->setUniform("u_invRes", vec2(1.0 / size.x, 1.0 / size.y));
 		irradiance_shader->setUniform("u_inverse_viewprojection", camera->inverse_viewprojection_matrix);
 		quad->render(GL_TRIANGLES);
+
+		glDisable(GL_BLEND);
+	}
+
+	//TODO mejorar opcion UI
+	if (show_probes) {
+		glEnable(GL_DEPTH_TEST);
+		glDepthFunc(GL_LEQUAL);
+		glDepthMask(true);
+
+		renderAllProbes(1.0f);
 	}
 
 	linear_fbo->unbind();
@@ -1159,7 +1172,6 @@ void SCN::Renderer::baseRenderMP(GFX::Mesh* mesh, GFX::Shader* shader) {
 void SCN::Renderer::renderAllProbes(float size) {
 	for (int iP = 0; iP < probes_info.num_probes; ++iP)
 	{
-		int probe_index = iP;
 		renderProbe(probes.at(iP).pos, size, probes.at(iP).sh.coeffs->v);
 	}
 }
@@ -1308,8 +1320,9 @@ void Renderer::showUI()
 	if (ImGui::Button("Capture Irradiance")) {
 		//now compute the coeffs for every probe
 		captureAllProbes(5.f);
-		use_irradiance = true;
 	}
+	ImGui::Checkbox("Show probes", &show_probes);
+	ImGui::Checkbox("Use irradience", &use_irradiance);
 }
 
 #else
