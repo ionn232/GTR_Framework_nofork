@@ -235,6 +235,9 @@
     <ClInclude Include="..\..\src\utils\gltf_loader.h" />
     <ClInclude Include="..\..\src\utils\utils.h" />
   </ItemGroup>
+  <ItemGroup>
+    <None Include="..\..\data\shader_atlas.glsl" />
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>

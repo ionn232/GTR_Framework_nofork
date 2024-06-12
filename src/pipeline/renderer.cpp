@@ -53,6 +53,10 @@ Renderer::Renderer(const char* shader_atlas_filename)
 
 	sphere.createSphere(1.0f);
 	sphere.uploadToVRAM();
+
+	//test TODO quitar
+	test_probe.pos = vec3(0.0, 0.0, 0.0);
+	test_probe.sh.coeffs[7] = vec3(1.0, 0.0, 0.0);
 }
 
 void Renderer::setupScene()
@@ -271,7 +275,6 @@ void Renderer::renderScene(SCN::Scene* scene, Camera* camera) {
 			gamma_shader->disable();
 		}
 	}
-
 	//update screen size
 	prevScreenSize = size;
 }
@@ -483,7 +486,7 @@ void Renderer::renderSceneDeferred(SCN::Scene* scene, Camera* camera) {
 		return;
 	}
 
-	//deferred render to a FBO
+	//deferred render to FBO
 	linear_fbo->bind();
 
 	glClearColor(scene->background_color.x, scene->background_color.y, scene->background_color.z, 1.0);
@@ -579,6 +582,9 @@ void Renderer::renderSceneDeferred(SCN::Scene* scene, Camera* camera) {
 		renderNode(semitransparent_objects[i], camera, eRenderTypes::FORWARD);
 	}
 	glDisable(GL_BLEND);
+
+
+	renderProbe(test_probe.pos, 50.f, test_probe.sh.coeffs->v);
 
 	linear_fbo->unbind();
 	partial_render = false;
@@ -1053,6 +1059,30 @@ void SCN::Renderer::baseRenderMP(GFX::Mesh* mesh, GFX::Shader* shader) {
 	shader->setUniform("u_light_type", light_type);
 	mesh->render(GL_TRIANGLES);
 }
+
+void SCN::Renderer::renderProbe(vec3 pos, float size, float* coeffs)
+{
+	Camera* camera = Camera::current;
+	GFX::Shader* shader = GFX::Shader::Get("probe");
+
+	glEnable(GL_CULL_FACE);
+	glDisable(GL_BLEND);
+	glEnable(GL_DEPTH_TEST);
+
+	Matrix44 model;
+	model.setTranslation(pos.x, pos.y, pos.z);
+	model.scale(size, size, size);
+
+	shader->enable();
+	shader->setUniform("u_viewprojection",
+		camera->viewprojection_matrix);
+	shader->setUniform("u_camera_position", camera->eye);
+	shader->setUniform("u_model", model);
+	shader->setUniform3Array("u_coeffs", coeffs, 9);
+
+	sphere.render(GL_TRIANGLES);
+}
+
 
 #ifndef SKIP_IMGUI
 

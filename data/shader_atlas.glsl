@@ -14,6 +14,7 @@ depth quad.vs depth.fs
 multi basic.vs multi.fs
 gamma quad.vs gamma.fs
 tonemapper quad.vs tonemapper.fs
+probe basic.vs probe.fs
 
 \basic.vs
 
@@ -304,6 +305,9 @@ void main()
 	}
 
 	vec3 emissive_pixel = texture( u_emissive, v_uv ).xyz;
+	emissive_pixel.xyz = pow(emissive_pixel.xyz, vec3(2.2));
+	vec3 lin_emissive_factor = pow(u_emissive_factor.xyz, vec3(2.2));
+	emissive_pixel *= lin_emissive_factor;
 
 	float spec_ks = texture( u_metal_roughness, v_uv).g;
 	float spec_a =  texture( u_metal_roughness, v_uv).b;
@@ -397,7 +401,7 @@ void main()
 		}
 	}
 	FragColor.xyz = color.xyz * light;
-	if (u_use_emissive == 1) {FragColor.xyz += pow(emissive_pixel * u_emissive_factor, vec3(2.2));}
+	if (u_use_emissive == 1) {FragColor.xyz += emissive_pixel;}
 	FragColor.a = color.a;
 }
 
@@ -546,6 +550,9 @@ void main()
 	float spec_a =  texture( u_metal_roughness, v_uv).b;
 
 	vec3 emissive_pixel = texture( u_emissive, v_uv ).xyz;
+	emissive_pixel.xyz = pow(emissive_pixel.xyz, vec3(2.2));
+	vec3 lin_emissive_factor = pow(u_emissive_factor.xyz, vec3(2.2));
+	emissive_pixel *= lin_emissive_factor;
 
 	vec3 light_color =  pow(u_light_col, vec3(2.2));
 
@@ -642,7 +649,7 @@ void main()
 		}
 	}
 	FragColor.xyz = color.xyz * light;
-	if (u_light_type == 4 && u_use_emissive == 1) {FragColor.xyz += pow(emissive_pixel * u_emissive_factor, vec3(2.2));}
+	if (u_light_type == 4 && u_use_emissive == 1) {FragColor.xyz += emissive_pixel;}
 	FragColor.a = color.a;
 }
 
@@ -715,8 +722,10 @@ void main()
 	if(color.a < u_alpha_cutoff)
 		discard;
 
-	vec3 emissive_pixel = texture( u_emissive, uv ).xyz * u_emissive_factor;
-	emissive_pixel = pow(emissive_pixel, vec3(2.2));
+	vec3 emissive_pixel = texture( u_emissive, v_uv ).xyz;
+	emissive_pixel.xyz = pow(emissive_pixel.xyz, vec3(2.2));
+	vec3 lin_emissive_factor = pow(u_emissive_factor.xyz, vec3(2.2));
+	emissive_pixel *= lin_emissive_factor;
 
 	vec3 N = normalize(v_normal);
 	vec3 normal_pixel = texture( u_normalmap, uv ).xyz;
@@ -1396,3 +1405,77 @@ void main() {
 	gl_FragColor = vec4( rgb, color.a );
 }
 
+\probe.fs
+
+#version 330 core
+
+in vec3 v_position;
+in vec3 v_world_position;
+in vec3 v_normal;
+in vec2 v_uv;
+in vec4 v_color;
+
+uniform vec3 u_coeffs[9];
+
+out vec4 FragColor;
+
+const float Pi = 3.141592654;
+const float CosineA0 = Pi;
+const float CosineA1 = (2.0 * Pi) / 3.0;
+const float CosineA2 = Pi * 0.25;
+struct SH9 { float c[9]; }; //to store weights
+struct SH9Color { vec3 c[9]; }; //to store colors
+
+void SHCosineLobe(in vec3 dir, out SH9 sh) //SH9
+{
+	// Band 0
+	sh.c[0] = 0.282095 * CosineA0;
+	// Band 1
+	sh.c[1] = 0.488603 * dir.y * CosineA1; 
+	sh.c[2] = 0.488603 * dir.z * CosineA1;
+	sh.c[3] = 0.488603 * dir.x * CosineA1;
+	// Band 2
+	sh.c[4] = 1.092548 * dir.x * dir.y * CosineA2;
+	sh.c[5] = 1.092548 * dir.y * dir.z * CosineA2;
+	sh.c[6] = 0.315392 * (3.0 * dir.z * dir.z - 1.0) * CosineA2;
+	sh.c[7] = 1.092548 * dir.x * dir.z * CosineA2;
+	sh.c[8] = 0.546274 * (dir.x * dir.x - dir.y * dir.y) * CosineA2;
+}
+
+vec3 ComputeSHIrradiance(in vec3 normal, in SH9Color sh)
+{
+	// Compute the cosine lobe in SH, oriented about the normal direction
+	SH9 shCosine;
+	SHCosineLobe(normal, shCosine);
+	// Compute the SH dot product to get irradiance
+	vec3 irradiance = vec3(0.0);
+	for(int i = 0; i < 9; ++i)
+		irradiance += sh.c[i] * shCosine.c[i];
+
+	return irradiance;
+}
+
+SH9Color convert_to_struct (in vec3 coeffs[9]) { //shader not compiling? --> just unwrap to main
+	SH9Color sh;
+	sh.c[0] = coeffs[0];
+	sh.c[1] = coeffs[1];
+	sh.c[2] = coeffs[2];
+	sh.c[3] = coeffs[3];
+	sh.c[4] = coeffs[4];
+	sh.c[5] = coeffs[5];
+	sh.c[6] = coeffs[6];
+	sh.c[7] = coeffs[7];
+	sh.c[8] = coeffs[8];
+	return sh;
+}
+
+void main()
+{
+	vec3 color;
+	vec3 N = normalize(v_normal);
+
+	SH9Color sh = convert_to_struct(u_coeffs);
+	color.xyz = ComputeSHIrradiance(N, sh);
+
+	FragColor = vec4(max(color, vec3(0.0)), 1.0);
+}

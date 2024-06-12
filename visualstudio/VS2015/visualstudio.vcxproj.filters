@@ -279,4 +279,7 @@
       <UniqueIdentifier>{ec6aad67-3187-451b-b982-7651fbee071d}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
+  <ItemGroup>
+    <None Include="..\..\data\shader_atlas.glsl" />
+  </ItemGroup>
 </Project>

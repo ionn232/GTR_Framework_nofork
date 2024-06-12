@@ -3,6 +3,7 @@
 #include "prefab.h"
 
 #include "light.h"
+#include "../gfx/sphericalharmonics.h"
 
 #define MAX_LIGHTS_SP 25
 
@@ -38,6 +39,13 @@ enum eSSAO {
 	SSAOplus,
 };
 
+struct sProbe {
+	vec3 pos; //where is located
+	vec3 local; //its ijk pos in the matrix
+	int index; //its index in the linear array
+	SphericalHarmonics sh; //coeffs
+};
+
 namespace SCN {
 
 	class Prefab;
@@ -48,6 +56,9 @@ namespace SCN {
 	class Renderer
 	{
 	public:
+
+		sProbe test_probe;
+
 		//render options
 		bool render_wireframe;
 		bool render_boundaries;
@@ -97,7 +108,6 @@ namespace SCN {
 
 		bool partial_render; //stop rendering at some intermediate point (to visualize gbuffers, ssao, etc.)
 
-
 		Renderer(const char* shaders_atlas_filename );
 
 		//just to be sure we have everything ready for the rendering
@@ -141,6 +151,9 @@ namespace SCN {
 		void lightToShaderSP(GFX::Shader* shader); //send light uniforms to shader for single-pass rendering
 		void lightToShaderMP(LightEntity* light, GFX::Shader* shader); //send light uniforms to shader for multi-pass rendering (one light)
 		void baseRenderMP(GFX::Mesh* mesh, GFX::Shader* shader); //draws first render of multi-pass using only ambien light (blends others on top)
+
+
+		void renderProbe(vec3 pos, float size, float* coeffs);
 	};
 
 };
