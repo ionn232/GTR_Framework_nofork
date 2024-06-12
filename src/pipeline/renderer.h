@@ -39,12 +39,23 @@ enum eSSAO {
 	SSAOplus,
 };
 
+//data structure for irradiance probes
 struct sProbe {
 	vec3 pos; //where is located
 	vec3 local; //its ijk pos in the matrix
 	int index; //its index in the linear array
 	SphericalHarmonics sh; //coeffs
 };
+
+//struct to store grid info
+struct sIrradianceInfo {
+	vec3 start;
+	vec3 end;
+	vec3 dim;
+	vec3 delta;
+	int num_probes;
+};
+
 
 namespace SCN {
 
@@ -56,9 +67,6 @@ namespace SCN {
 	class Renderer
 	{
 	public:
-
-		sProbe test_probe;
-
 		//render options
 		bool render_wireframe;
 		bool render_boundaries;
@@ -70,7 +78,8 @@ namespace SCN {
 		bool gui_use_specular = true;
 		bool gui_use_shadowmaps = true;
 		int gui_shadowmap_res = 1024;
-		bool gui_use_tonemapper = false;
+		bool gui_use_tonemapper = true;
+		bool use_irradiance = false; //once the probes have been cached once this will activate
 
 		//tonemapper parameters
 		float tmp_scale = 1.0f;
@@ -99,12 +108,20 @@ namespace SCN {
 		std::vector<vec3> ssao_positions;
 		Matrix44 prevViewProj; //for temporal reprojection in SSAO
 
+		GFX::FBO* irradiance_fbo;
+
 		//scene container
 		SCN::Scene* scene;
 
 		//window size
 		vec2 size;
 		vec2 prevScreenSize = vec2(0.0, 0.0); //to detect if fbos must be rebuilt
+
+		//variables for irradiance computation
+		std::vector<sProbe> probes;
+		sIrradianceInfo probes_info;
+		Camera* probeCam;
+		GFX::Texture* probes_texture;
 
 		bool partial_render; //stop rendering at some intermediate point (to visualize gbuffers, ssao, etc.)
 
@@ -126,6 +143,9 @@ namespace SCN {
 
 		//render the skybox
 		void renderSkybox(GFX::Texture* cubemap);
+
+		//forward scene render adapted for irradiance probes (no shadowmaps, renders to whatever context is active previous to all)
+		void renderProbeFaces(SCN::Scene*, Camera* camera);
 	
 		//to render one node from the prefab and its children
 		void renderNode(SCN::Node* node, Camera* camera, eRenderTypes render_type);
@@ -153,7 +173,10 @@ namespace SCN {
 		void baseRenderMP(GFX::Mesh* mesh, GFX::Shader* shader); //draws first render of multi-pass using only ambien light (blends others on top)
 
 
+		void renderAllProbes(float size);
 		void renderProbe(vec3 pos, float size, float* coeffs);
+		void captureAllProbes(float size);
+		void captureProbe(sProbe& p);
 	};
 
 };

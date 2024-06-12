@@ -15,6 +15,7 @@ multi basic.vs multi.fs
 gamma quad.vs gamma.fs
 tonemapper quad.vs tonemapper.fs
 probe basic.vs probe.fs
+irradiance quad.vs irradiance.fs
 
 \basic.vs
 
@@ -1478,4 +1479,123 @@ void main()
 	color.xyz = ComputeSHIrradiance(N, sh);
 
 	FragColor = vec4(max(color, vec3(0.0)), 1.0);
+}
+
+
+\irradiance.fs
+
+#version 330 core
+
+in vec3 v_position;
+in vec2 v_uv;
+
+uniform sampler2D u_color_texture;
+uniform sampler2D u_normal_texture;
+uniform sampler2D u_mat_properties_texture;
+uniform sampler2D u_depth_texture;
+uniform sampler2D u_probes_texture;
+
+uniform vec2 u_invRes;
+uniform mat4 u_inverse_viewprojection;
+uniform mat4 u_viewprojection;
+
+uniform vec3 u_irr_start;
+uniform vec3 u_irr_end;
+uniform vec3 u_irr_dims;
+uniform vec3 u_irr_delta;
+uniform int u_num_probes;
+uniform float u_irr_normal_distance;
+
+uniform vec3 u_camera_position;
+
+out vec4 FragColor;
+
+const float Pi = 3.141592654;
+const float CosineA0 = Pi;
+const float CosineA1 = (2.0 * Pi) / 3.0;
+const float CosineA2 = Pi * 0.25;
+struct SH9 { float c[9]; }; //to store weights
+struct SH9Color { vec3 c[9]; }; //to store colors
+
+void SHCosineLobe(in vec3 dir, out SH9 sh) //SH9
+{
+	// Band 0
+	sh.c[0] = 0.282095 * CosineA0;
+	// Band 1
+	sh.c[1] = 0.488603 * dir.y * CosineA1; 
+	sh.c[2] = 0.488603 * dir.z * CosineA1;
+	sh.c[3] = 0.488603 * dir.x * CosineA1;
+	// Band 2
+	sh.c[4] = 1.092548 * dir.x * dir.y * CosineA2;
+	sh.c[5] = 1.092548 * dir.y * dir.z * CosineA2;
+	sh.c[6] = 0.315392 * (3.0 * dir.z * dir.z - 1.0) * CosineA2;
+	sh.c[7] = 1.092548 * dir.x * dir.z * CosineA2;
+	sh.c[8] = 0.546274 * (dir.x * dir.x - dir.y * dir.y) * CosineA2;
+}
+
+vec3 ComputeSHIrradiance(in vec3 normal, in SH9Color sh)
+{
+	// Compute the cosine lobe in SH, oriented about the normal direction
+	SH9 shCosine;
+	SHCosineLobe(normal, shCosine);
+	// Compute the SH dot product to get irradiance
+	vec3 irradiance = vec3(0.0);
+	for(int i = 0; i < 9; ++i)
+		irradiance += sh.c[i] * shCosine.c[i];
+
+	return irradiance;
+}
+
+void main() {
+	vec2 uv = gl_FragCoord.xy * u_invRes.xy;
+	vec3 light = vec3(0.0, 0.0, 0.0);
+	vec3 color = texture( u_color_texture, uv ).xyz;
+	float depth = texture(u_depth_texture, uv).x;
+	vec3 N = texture(u_normal_texture, uv).xyz * 2.0 - vec3(1.0);
+	N = normalize(N);
+	float metalness = texture( u_mat_properties_texture, uv).g;
+	float shininess =  texture( u_mat_properties_texture, uv).b;
+
+	if(depth == 1.0) {
+		discard;
+	}
+
+	//reconstruct world position from depth and inv. viewproj
+	vec4 screen_pos = vec4(uv.x*2.0-1.0, uv.y*2.0-1.0, depth*2.0-1.0, 1.0);
+	vec4 proj_worldpos = u_inverse_viewprojection * screen_pos;
+	vec3 worldpos = proj_worldpos.xyz / proj_worldpos.w;
+
+	vec3 V = normalize(u_camera_position - worldpos);
+
+
+	//computing nearest probe index based on world position
+	vec3 irr_range = u_irr_end - u_irr_start;
+	vec3 irr_local_pos = clamp( worldpos - u_irr_start + N * u_irr_normal_distance, vec3(0.0), irr_range );
+
+	//convert from world pos to grid pos
+	vec3 irr_norm_pos = irr_local_pos / u_irr_delta;
+
+	//round values as we cannot fetch between rows for now
+	vec3 local_indices = round( irr_norm_pos );
+
+	//compute in which row is the probe stored
+	float row = local_indices.x + local_indices.y * u_irr_dims.x + local_indices.z * u_irr_dims.x * u_irr_dims.y;
+
+	//find the UV.y coord of that row in the probes texture
+	float row_uv = (row + 1.0) / (u_num_probes + 1.0);
+
+	SH9Color sh;
+
+	//fill the coefficients
+	const float d_uvx = 1.0 / 9.0;
+	for(int i = 0; i < 9; ++i)
+	{
+		vec2 coeffs_uv = vec2( (float(i)+0.5) * d_uvx, row_uv );
+		sh.c[i] = texture( u_probes_texture, coeffs_uv).xyz;
+	}
+
+	//now we can use the coefficients to compute the irradiance
+	vec3 irradiance = ComputeSHIrradiance( N, sh );
+
+	FragColor = vec4(irradiance, 1.0);
 }
