@@ -1,0 +1,40 @@
+{
+	"background_color":	[0,0,0],
+	"ambient_light":	[0.0134083172306418, 0.0121107380837202, 0.0147058963775635],
+	"camera_position":	[-300, 90, -150],
+	"camera_target":	[0, 40, 0],
+	"camera_fov":	60,
+	"skybox":	"night.hdre",
+	"entities":	[{
+			"name":	"street",
+			"layers":	3,
+			"position":	[0, 0, 0],
+			"scale":	[10, 10, 10],
+			"rotation":	[0, 0, 0, 1],
+			"filename":	"irradiance/street_irradiance.gltf",
+			"type":	"PREFAB"
+		}, {
+			"name":	"spot",
+			"layers":	3,
+			"position":	[-15, 71.379379272460938, 39.033462524414062],
+			"scale":	[1, 0.99999988079071045, 0.99999988079071045],
+			"rotation":	[-0.71933841705322266, 0, 0, 0.69465982913970947],
+			"color":	[1, 0.92128026485443115, 0.61764705181121826],
+			"intensity":	4.1279997825622559,
+			"max_dist":	100,
+			"cast_shadows":	true,
+			"near_dist":	0.10000000149011612,
+			"cone_start":	12.932999610900879,
+			"cone_end":	45.027999877929688,
+			"light_type":	"SPOT",
+			"type":	"LIGHT"
+		}, {
+			"name":	"entity",
+			"layers":	3,
+			"position":	[-9.3450412750244141, 5.61474225833081e-05, -72.529388427734375],
+			"scale":	[11.36799144744873, 11.367999076843262, 11.36799144744873],
+			"rotation":	[-4.73651380161755e-06, 0.98513275384902954, -6.34611751593184e-06, -0.17179487645626068],
+			"filename":	"prefabs/sign.glb",
+			"type":	"PREFAB"
+		}]
+}

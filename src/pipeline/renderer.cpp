@@ -47,14 +47,6 @@ Renderer::Renderer(const char* shader_atlas_filename)
 	prevViewProj = Matrix44::IDENTITY;
 	ssao_positions = generateSpherePoints(128, 1, false); //IDEA: cambiar num puntos UI
 
-	//irradiance variables initialization
-	probeCam = new Camera();
-	probeCam->setPerspective(90, 1, 0.1, 1000);
-	probes_texture = nullptr;
-	irradiance_fbo = new GFX::FBO();
-	irradiance_fbo->create(64, 64, 1, GL_RGB, GL_FLOAT, true);
-	irradiance_fbo->color_textures[0]->setName("IRRADIANCE FBO");
-
 	if (!GFX::Shader::LoadAtlas(shader_atlas_filename))
 		exit(1);
 	GFX::checkGLErrors();
@@ -62,40 +54,72 @@ Renderer::Renderer(const char* shader_atlas_filename)
 	sphere.createSphere(1.0f);
 	sphere.uploadToVRAM();
 
-	//define and fill irradiance probe grid
-	//define bounding of the grid and num probes
-	probes_info.start.set(-80, 0, -90);
-	probes_info.end.set(80, 80, 90);
-	probes_info.dim.set(12, 6, 12); //TODO: ajustar en UI
+	//irradiance variables initialization
+	probeCam = new Camera();
+	probeCam->setPerspective(90, 1, 0.1, 1000);
+	irradiance_fbo = new GFX::FBO();
+	irradiance_fbo->create(64, 64, 1, GL_RGB, GL_FLOAT, true);
+	irradiance_fbo->color_textures[0]->setName("IRRADIANCE FBO");
+	probes_texture = nullptr;
 
-	//compute the vector from one corner to the other
-	vec3 delta = (probes_info.end - probes_info.start);
-	//compute delta from one probe to the next one
-	delta.x /= (probes_info.dim.x - 1);
-	delta.y /= (probes_info.dim.y - 1);
-	delta.z /= (probes_info.dim.z - 1);
-	probes_info.delta = delta; //store
+	FILE* f = fopen("irradiance.bin", "rb");
+	if (!f) {
+		std::cout << "previous irradiance data not found, please use 'Capture Irradiance' option" << std::endl;
+		//define and fill irradiance probe grid
+		//define bounding of the grid and num probes
+		probes_info.start.set(-400, 0, -500);
+		probes_info.end.set(600, 300, 500);
+		probes_info.dim.set(15, 10, 15); //TODO: ajustar en UI
 
-	//lets compute the centers
-	//pay attention at the order at which we add them
-	for (int z = 0; z < probes_info.dim.z; ++z) {
-		for (int y = 0; y < probes_info.dim.y; ++y) {
-			for (int x = 0; x < probes_info.dim.x; ++x) {
-				sProbe p;
-				p.local.set(x, y, z);
+		//compute the vector from one corner to the other
+		vec3 delta = (probes_info.end - probes_info.start);
+		//compute delta from one probe to the next one
+		delta.x /= (probes_info.dim.x - 1);
+		delta.y /= (probes_info.dim.y - 1);
+		delta.z /= (probes_info.dim.z - 1);
+		probes_info.delta = delta; //store
 
-				//index in the linear array
-				p.index = x + y * probes_info.dim.x + z *
-					probes_info.dim.x * probes_info.dim.y;
+		//lets compute the centers
+		//pay attention at the order at which we add them
+		for (int z = 0; z < probes_info.dim.z; ++z) {
+			for (int y = 0; y < probes_info.dim.y; ++y) {
+				for (int x = 0; x < probes_info.dim.x; ++x) {
+					sProbe p;
+					p.local.set(x, y, z);
 
-				//and its position
-				p.pos = probes_info.start +
-					probes_info.delta * Vector3f(x, y, z);
-				probes.push_back(p);
+					//index in the linear array
+					p.index = x + y * probes_info.dim.x + z *
+						probes_info.dim.x * probes_info.dim.y;
+
+					//and its position
+					p.pos = probes_info.start +
+						probes_info.delta * Vector3f(x, y, z);
+					probes.push_back(p);
+				}
 			}
 		}
+		probes_info.num_probes = probes.size();
 	}
-	probes_info.num_probes = probes.size();
+	else {
+		std::cout << "Loading previous irradiance data..." << std::endl;
+		//read header
+		fread(&probes_info, sizeof(sIrradianceInfo), 1, f);
+
+		//allocate space for the probes
+		probes.resize(probes_info.num_probes);
+
+		//read from disk directly to our probes container in memory
+		fread(&probes[0], sizeof(sProbe), probes.size(), f);
+		fclose(f);
+
+		//render irradiance texture using loaded data.
+		renderIrradianceTexture();
+	}
+
+	//reflection probes
+	sReflectionProbe* test_ref_probe = new sReflectionProbe;
+	test_ref_probe->pos = vec3(0,10,0);
+	reflection_probes.push_back(test_ref_probe);
 }
 
 void Renderer::setupScene()
@@ -664,10 +688,9 @@ void Renderer::renderSceneDeferred(SCN::Scene* scene, Camera* camera) {
 		glDepthMask(true);
 	}
 
-	//TODO mejorar opcion UI
-	if (show_probes) {
+	if (show_irr_probes) {
 		glEnable(GL_DEPTH_TEST);
-		renderAllProbes(1.0f);
+		renderAllProbes(irr_probe_size);
 	}
 
 	linear_fbo->unbind();
@@ -1197,14 +1220,18 @@ void SCN::Renderer::renderProbe(vec3 pos, float size, float* coeffs)
 	sphere.render(GL_TRIANGLES);
 }
 
-void SCN::Renderer::captureAllProbes(float size) {
+void SCN::Renderer::captureAllProbes() {
 	//set coefficients
 	for (int iP = 0; iP < probes_info.num_probes; ++iP)
 	{
 		captureProbe(probes.at(iP));
 	}
+	renderIrradianceTexture();
+}
 
-	//create the texture to store the probes (do this ONCE!!!)
+void SCN::Renderer::renderIrradianceTexture() {
+
+	//create the texture to store the probes
 	if (!probes_texture) {
 		probes_texture = new GFX::Texture(
 			9, //9 coefficients per probe
@@ -1231,7 +1258,6 @@ void SCN::Renderer::captureAllProbes(float size) {
 
 	//always free memory after allocating it!!!
 	delete[] sh_data;
-
 }
 
 void SCN::Renderer::captureProbe(sProbe& p) {
@@ -1302,12 +1328,29 @@ void Renderer::showUI()
 		ImGui::Combo("Display channel", (int*)&deferred_display, "DEFAULT\0COLOR\0NORMALS\0MATERIAL_PROPERTIES\0DEPTH\0EMISSIVE\0SSAO_result\0");
 		ImGui::Combo("Occlusion mode", (int*)&occlusion_mode, "TEXTURE\0SSAO\0SSAOplus\0");
 		ImGui::DragFloat("SSAO radius", &ssao_radius, 0.01f, 0.0f, 20.0f);
-		if (ImGui::Button("Capture Irradiance")) {
-			//now compute the coeffs for every probe
-			captureAllProbes(5.f);
-		}
-		ImGui::Checkbox("Show probes", &show_probes);
 		ImGui::Checkbox("Use irradience", &use_irradiance);
+		if (use_irradiance && ImGui::BeginCombo("Irradiance", "Show options")) {
+			if (ImGui::Button("Capture Irradiance")) {
+				//compute probe coefficients and save to disk
+				captureAllProbes();
+				FILE* f = fopen("irradiance.bin", "wb");
+				fwrite(&probes_info, sizeof(sIrradianceInfo), 1, f);
+				fwrite(&(probes[0]), sizeof(sProbe), probes.size(), f);
+				fclose(f);
+			}
+			if (ImGui::Button("Delete irradiance data")) {
+				//compute probe coefficients and save to disk
+				if (remove("irradiance.bin") != 0) {
+					std::cout << "irradiance data not found" << std::endl;
+				}
+				else {
+					std::cout << "succesfully removed irradiance data" << std::endl;
+				}
+			}
+			ImGui::Checkbox("Show probes", &show_irr_probes);
+			ImGui::DragFloat("Probe size", &irr_probe_size, 0.01f, 1.0f, 10.0f);
+			ImGui::EndCombo();
+		}
 	}
 	ImGui::Checkbox("Use tonemapper", &gui_use_tonemapper);
 	if (gui_use_tonemapper) {

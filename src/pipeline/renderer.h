@@ -56,6 +56,13 @@ struct sIrradianceInfo {
 	int num_probes;
 };
 
+//struct to store reflection probes info
+struct sReflectionProbe {
+	vec3 pos;
+	GFX::Texture* cubemap = NULL;
+};
+
+
 
 namespace SCN {
 
@@ -79,8 +86,9 @@ namespace SCN {
 		bool gui_use_shadowmaps = true;
 		int gui_shadowmap_res = 1024;
 		bool gui_use_tonemapper = true;
-		bool use_irradiance = false;
-		bool show_probes = false;
+		bool use_irradiance = true;
+		bool show_irr_probes = false;
+		float irr_probe_size = 5.0f;
 
 		//tonemapper parameters
 		float tmp_scale = 1.0f;
@@ -123,6 +131,9 @@ namespace SCN {
 		sIrradianceInfo probes_info;
 		Camera* probeCam;
 		GFX::Texture* probes_texture;
+
+		//reflection probes
+		std::vector<sReflectionProbe*> reflection_probes;
 
 		bool partial_render; //stop rendering at some intermediate point (to visualize gbuffers, ssao, etc.)
 
@@ -173,11 +184,15 @@ namespace SCN {
 		void lightToShaderMP(LightEntity* light, GFX::Shader* shader); //send light uniforms to shader for multi-pass rendering (one light)
 		void baseRenderMP(GFX::Mesh* mesh, GFX::Shader* shader); //draws first render of multi-pass using only ambien light (blends others on top)
 
-
+		//irradiance methods
 		void renderAllProbes(float size);
 		void renderProbe(vec3 pos, float size, float* coeffs);
-		void captureAllProbes(float size);
+		void captureAllProbes();
 		void captureProbe(sProbe& p);
+		void renderIrradianceTexture();
+
+		//reflection methods
+
 	};
 
 };
