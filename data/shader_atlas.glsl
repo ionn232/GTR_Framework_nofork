@@ -16,6 +16,7 @@ gamma quad.vs gamma.fs
 tonemapper quad.vs tonemapper.fs
 probe basic.vs probe.fs
 irradiance quad.vs irradiance.fs
+reflection_probe basic.vs reflection_probe.fs
 
 \basic.vs
 
@@ -1492,9 +1493,6 @@ in vec2 v_uv;
 uniform sampler2D u_color_texture;
 uniform sampler2D u_normal_texture;
 
-uniform sampler2D u_ssao_map;
-uniform int u_occlusion_type;
-
 //unused TODO remove if not necessary
 uniform sampler2D u_mat_properties_texture;
 uniform sampler2D u_depth_texture;
@@ -1636,4 +1634,30 @@ void main() {
 	vec3 irr = mix( irr0, irr1, factors.y );
 
 	FragColor = vec4(color.xyz * irr, 1.0);
+}
+
+\reflection_probe.fs
+
+#version 330 core
+
+in vec3 v_position;
+in vec3 v_world_position;
+in vec3 v_normal;
+in vec2 v_uv;
+in vec4 v_color;
+
+uniform vec3 u_camera_position;
+uniform samplerCube u_environment_texture;
+uniform int u_linearize_colors;
+
+out vec4 FragColor;
+
+void main()
+{
+	vec3 N = normalize(v_normal);
+	vec3 color = textureLod(u_environment_texture, N, 0.0).xyz;
+	if (u_linearize_colors == 1) { color = pow(color, vec3(2.2)); } //linearize color
+
+
+	FragColor = vec4(max(color, vec3(0.0)), 1.0);
 }

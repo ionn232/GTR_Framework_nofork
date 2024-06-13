@@ -89,6 +89,7 @@ namespace SCN {
 		bool use_irradiance = true;
 		bool show_irr_probes = false;
 		float irr_probe_size = 5.0f;
+		bool show_ref_probes = true;
 
 		//tonemapper parameters
 		float tmp_scale = 1.0f;
@@ -117,14 +118,14 @@ namespace SCN {
 		std::vector<vec3> ssao_positions;
 		Matrix44 prevViewProj; //for temporal reprojection in SSAO
 
-		GFX::FBO* irradiance_fbo;
-
 		//scene container
 		SCN::Scene* scene;
 
 		//window size
 		vec2 size;
 		vec2 prevScreenSize = vec2(0.0, 0.0); //to detect if fbos must be rebuilt
+
+		GFX::FBO* multi_probes_fbo;
 
 		//variables for irradiance computation
 		std::vector<sProbe> probes;
@@ -134,6 +135,7 @@ namespace SCN {
 
 		//reflection probes
 		std::vector<sReflectionProbe*> reflection_probes;
+		Camera* reflectionCam;
 
 		bool partial_render; //stop rendering at some intermediate point (to visualize gbuffers, ssao, etc.)
 
@@ -157,7 +159,7 @@ namespace SCN {
 		void renderSkybox(GFX::Texture* cubemap);
 
 		//forward scene render adapted for irradiance probes (no shadowmaps, renders to whatever context is active previous to all)
-		void renderProbeFaces(SCN::Scene*, Camera* camera);
+		void renderProbeFaces(SCN::Scene*, Camera* camera, bool render_skybox);
 	
 		//to render one node from the prefab and its children
 		void renderNode(SCN::Node* node, Camera* camera, eRenderTypes render_type);
@@ -192,7 +194,8 @@ namespace SCN {
 		void renderIrradianceTexture();
 
 		//reflection methods
-
+		void renderReflectionProbe(sReflectionProbe& s, float scale);
+		void captureReflectionProbe(sReflectionProbe& s);
 	};
 
 };

@@ -43,7 +43,7 @@ Renderer::Renderer(const char* shader_atlas_filename)
 	linear_fbo = nullptr;
 	ssao_fbo = nullptr;
 	blurred_ssao = nullptr;
-	irradiance_fbo = nullptr;
+	multi_probes_fbo = nullptr;
 	prevViewProj = Matrix44::IDENTITY;
 	ssao_positions = generateSpherePoints(128, 1, false); //IDEA: cambiar num puntos UI
 
@@ -54,12 +54,14 @@ Renderer::Renderer(const char* shader_atlas_filename)
 	sphere.createSphere(1.0f);
 	sphere.uploadToVRAM();
 
+	//irradiance + reflection fbo
+	multi_probes_fbo = new GFX::FBO();
+	multi_probes_fbo->create(64, 64, 1, GL_RGB, GL_FLOAT, true);
+	multi_probes_fbo->color_textures[0]->setName("PROBE FBO");
+
 	//irradiance variables initialization
 	probeCam = new Camera();
 	probeCam->setPerspective(90, 1, 0.1, 1000);
-	irradiance_fbo = new GFX::FBO();
-	irradiance_fbo->create(64, 64, 1, GL_RGB, GL_FLOAT, true);
-	irradiance_fbo->color_textures[0]->setName("IRRADIANCE FBO");
 	probes_texture = nullptr;
 
 	FILE* f = fopen("irradiance.bin", "rb");
@@ -117,9 +119,15 @@ Renderer::Renderer(const char* shader_atlas_filename)
 	}
 
 	//reflection probes
-	sReflectionProbe* test_ref_probe = new sReflectionProbe;
-	test_ref_probe->pos = vec3(0,10,0);
-	reflection_probes.push_back(test_ref_probe);
+
+	//debug
+	//test_ref_probe.pos = vec3(0,80.f,0);
+	//test_ref_probe.cubemap = nullptr;
+	//reflection_probes.push_back(test_ref_probe);
+
+	reflection_probes.push_back(new sReflectionProbe({vec3(90,80,0), nullptr}));
+	reflection_probes.push_back(new sReflectionProbe({ vec3(0,80,0), nullptr }));
+	//end
 }
 
 void Renderer::setupScene()
@@ -671,14 +679,10 @@ void Renderer::renderSceneDeferred(SCN::Scene* scene, Camera* camera) {
 
 		irradiance_shader->setUniform("u_color_texture", gBuffersFBO->color_textures[0], 0);
 		irradiance_shader->setUniform("u_normal_texture", gBuffersFBO->color_textures[1], 1);
+		irradiance_shader->setUniform("u_mat_properties_texture", gBuffersFBO->color_textures[2], 2);
+		irradiance_shader->setUniform("u_depth_texture", gBuffersFBO->depth_texture, 3);
 
-		deferred_global->setUniform("u_occlusion_type", occlusion_mode);
-		deferred_global->setUniform("u_ssao_map", (occlusion_mode != eSSAO::TEXTURE ? blurred_ssao->color_textures[0] : GFX::Texture::getWhiteTexture()), 2);
-
-		irradiance_shader->setUniform("u_mat_properties_texture", gBuffersFBO->color_textures[2], 3);
-		irradiance_shader->setUniform("u_depth_texture", gBuffersFBO->depth_texture, 4);
-
-		irradiance_shader->setUniform("u_probes_texture", probes_texture, 5);
+		irradiance_shader->setUniform("u_probes_texture", probes_texture, 4);
 
 		irradiance_shader->setUniform("u_invRes", vec2(1.0 / size.x, 1.0 / size.y));
 		irradiance_shader->setUniform("u_inverse_viewprojection", camera->inverse_viewprojection_matrix);
@@ -688,9 +692,17 @@ void Renderer::renderSceneDeferred(SCN::Scene* scene, Camera* camera) {
 		glDepthMask(true);
 	}
 
+	glEnable(GL_DEPTH_TEST);
+	glDepthFunc(GL_LESS);
+
 	if (show_irr_probes) {
-		glEnable(GL_DEPTH_TEST);
 		renderAllProbes(irr_probe_size);
+	}
+
+	if (show_ref_probes) {
+		for (int i = 0; i < reflection_probes.size(); i++) {
+			renderReflectionProbe(*reflection_probes.at(i), 10.0);
+		}
 	}
 
 	linear_fbo->unbind();
@@ -724,7 +736,7 @@ void Renderer::renderSkybox(GFX::Texture* cubemap)
 	glEnable(GL_DEPTH_TEST);
 }
 
-void Renderer::renderProbeFaces(SCN::Scene*, Camera* camera) {
+void Renderer::renderProbeFaces(SCN::Scene*, Camera* camera, bool render_skybox) {
 	glDisable(GL_BLEND);
 	glEnable(GL_DEPTH_TEST);
 
@@ -734,6 +746,11 @@ void Renderer::renderProbeFaces(SCN::Scene*, Camera* camera) {
 	// Clear the color and the depth buffer
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 	GFX::checkGLErrors();
+
+	if (render_skybox) {
+		if (skybox_cubemap)
+			renderSkybox(skybox_cubemap);
+	}
 
 	//render entities
 	for (int i = 0; i < opaque_objects.size(); i++)
@@ -1211,9 +1228,7 @@ void SCN::Renderer::renderProbe(vec3 pos, float size, float* coeffs)
 	model.scale(size, size, size);
 
 	shader->enable();
-	shader->setUniform("u_viewprojection",
-		camera->viewprojection_matrix);
-	shader->setUniform("u_camera_position", camera->eye);
+	cameraToShader(camera, shader);
 	shader->setUniform("u_model", model);
 	shader->setUniform3Array("u_coeffs", coeffs, 9);
 
@@ -1273,16 +1288,71 @@ void SCN::Renderer::captureProbe(sProbe& p) {
 		probeCam->lookAt(eye, center, up);
 		probeCam->enable();
 		//render the scene from this point of view
-		irradiance_fbo->bind();
-		renderProbeFaces(scene, probeCam);
-		irradiance_fbo->unbind();
+		multi_probes_fbo->bind();
+		renderProbeFaces(scene, probeCam, false);
+		multi_probes_fbo->unbind();
 
 		//read the pixels back and store in a FloatImage
-		images[i].fromTexture(irradiance_fbo->color_textures[0]);
+		images[i].fromTexture(multi_probes_fbo->color_textures[0]);
 	}
 	//compute the coefficients given the six images
 	p.sh = computeSH(images);
 }
+
+void SCN::Renderer::renderReflectionProbe(sReflectionProbe& s, float scale) {
+	Camera* camera = Camera::current;
+	GFX::Shader* shader = GFX::Shader::Get("reflection_probe");
+
+	glEnable(GL_CULL_FACE);
+	glDisable(GL_BLEND);
+	glEnable(GL_DEPTH_TEST);
+
+	GFX::Texture* reflection_texture = s.cubemap == nullptr ? skybox_cubemap : s.cubemap;
+
+
+	Matrix44 model;
+	model.setTranslation(s.pos.x, s.pos.y, s.pos.z);
+	model.scale(scale, scale, scale);
+
+	shader->enable();
+	cameraToShader(camera, shader);
+	shader->setUniform("u_model", model);
+	shader->setUniform("u_environment_texture", reflection_texture, 0);
+	shader->setUniform("u_linearize_colors", (int)(s.cubemap == nullptr));
+
+	sphere.render(GL_TRIANGLES);
+}
+
+void SCN::Renderer::captureReflectionProbe(sReflectionProbe& s) {
+	if (!s.cubemap) {
+		s.cubemap = new GFX::Texture();
+		s.cubemap->createCubemap(128,128, nullptr, GL_RGB, GL_FLOAT, true);
+	}
+
+	//render the view from every side
+	for (int i = 0; i < 6; ++i)
+	{
+		//assign cubemap face to FBO
+		multi_probes_fbo->setTexture(s.cubemap, i);
+
+		//bind FBO
+		multi_probes_fbo->bind();
+
+		//render view
+		vec3 eye = s.pos;
+		vec3 center = s.pos + cubemapFaceNormals[i][2];
+		vec3 up = cubemapFaceNormals[i][1];
+		probeCam->lookAt(eye, center, up);
+		probeCam->enable();
+		renderProbeFaces(scene, probeCam, true); //TODO bindea otro fbo, nueva funcion
+		multi_probes_fbo->unbind();
+	}
+	//generate the mipmaps
+	glEnable(GL_TEXTURE_CUBE_MAP_SEAMLESS);
+	s.cubemap->generateMipmaps();
+
+}
+
 
 #ifndef SKIP_IMGUI
 
@@ -1347,8 +1417,18 @@ void Renderer::showUI()
 					std::cout << "succesfully removed irradiance data" << std::endl;
 				}
 			}
-			ImGui::Checkbox("Show probes", &show_irr_probes);
+			ImGui::Checkbox("Show irradiance probes", &show_irr_probes);
 			ImGui::DragFloat("Probe size", &irr_probe_size, 0.01f, 1.0f, 10.0f);
+			ImGui::EndCombo();
+		}
+		if (ImGui::BeginCombo("Reflections", "Show options")) {
+			ImGui::Checkbox("Show reflection probes", &show_ref_probes);
+			if (ImGui::Button("Capture Reflections")) {
+				//TODO do a function
+				for (int i = 0; i < reflection_probes.size(); i++) {
+					captureReflectionProbe(*reflection_probes.at(i));
+				}
+			}
 			ImGui::EndCombo();
 		}
 	}
