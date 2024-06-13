@@ -1583,6 +1583,7 @@ void main() {
 	float shininess =  texture( u_mat_properties_texture, uv).b;
 
 	if (depth == 1.0) { discard; }
+	if (depth > gl_FragDepth) { discard; }
 
 	//reconstruct world position from depth and inv. viewproj
 	vec4 screen_pos = vec4(uv.x*2.0-1.0, uv.y*2.0-1.0, depth*2.0-1.0, 1.0);
@@ -1649,15 +1650,18 @@ in vec4 v_color;
 uniform vec3 u_camera_position;
 uniform samplerCube u_environment_texture;
 uniform int u_linearize_colors;
+uniform sampler2D depth_map;
 
 out vec4 FragColor;
 
 void main()
 {
 	vec3 N = normalize(v_normal);
-	vec3 color = textureLod(u_environment_texture, N, 0.0).xyz;
+	vec3 E = v_world_position - u_camera_position;
+	vec3 R = reflect(E, N);
+	vec3 color = textureLod(u_environment_texture, R, 0.0).xyz;
 	if (u_linearize_colors == 1) { color = pow(color, vec3(2.2)); } //linearize color
 
 
-	FragColor = vec4(max(color, vec3(0.0)), 1.0);
+	FragColor = vec4(color, 1.0);
 }

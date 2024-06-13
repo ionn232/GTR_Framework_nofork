@@ -149,7 +149,7 @@ void Renderer::setupScene()
 	if (!linear_fbo || prevScreenSize.distance(size) > 0.0) {
 		delete linear_fbo;
 		linear_fbo = new GFX::FBO();
-		linear_fbo->create(size.x, size.y, 1, GL_RGBA, GL_FLOAT, false);
+		linear_fbo->create(size.x, size.y, 1, GL_RGBA, GL_FLOAT, true);
 		linear_fbo->color_textures[0]->setName("LINEAR RENDER");
 	}
 
@@ -347,6 +347,7 @@ void Renderer::renderScene(SCN::Scene* scene, Camera* camera) {
 		}
 	}
 	//update screen size
+	//linear_fbo->depth_texture->toViewport();
 	prevScreenSize = size;
 }
 
@@ -472,6 +473,12 @@ void Renderer::renderSceneDeferred(SCN::Scene* scene, Camera* camera) {
 	generateShadowmaps(camera); //render shadowmap atlas
 	camera->enable(); //reactivate scene camera
 
+	//update reflection probes
+	for (int i = 0; i < reflection_probes.size(); i++) {
+		captureReflectionProbe(*reflection_probes.at(i));
+	}
+	camera->enable(); //reactivate scene camera
+
 	//prepare SSAO
 	if (occlusion_mode != eSSAO::TEXTURE) {
 		bool firstIteration = false;
@@ -595,7 +602,7 @@ void Renderer::renderSceneDeferred(SCN::Scene* scene, Camera* camera) {
 	//initial pass (color + ambient + emissive + occlusion)
 	glEnable(GL_DEPTH_TEST);
 	glDepthFunc(GL_ALWAYS);
-	baseRenderMP(quad, deferred_global);
+	baseRenderMP(quad, deferred_global); //this forces the deferred depthmap into the linear fbo
 
 	//variables and flags for illumination pass
 	GFX::Mesh light_sphere;
@@ -648,11 +655,26 @@ void Renderer::renderSceneDeferred(SCN::Scene* scene, Camera* camera) {
 	glEnable(GL_DEPTH_TEST);
 	glDepthFunc(GL_LESS);
 
+
+	//render probes (important to do before rendering alpha nodes)
+	glEnable(GL_DEPTH_TEST);
+	glDepthFunc(GL_LESS);
+	if (show_irr_probes) {
+		renderAllProbes(irr_probe_size);
+	}
+	if (show_ref_probes) {
+		for (int i = 0; i < reflection_probes.size(); i++) { //TODO: create method to iterate. Or not.
+			renderReflectionProbe(*reflection_probes.at(i), 10.0);
+		}
+	}
+
 	//render semitransparent objects using forward rendering
+	glDepthMask(false);
 	for (int i = 0; i < semitransparent_objects.size(); i++)
 	{
-		renderNode(semitransparent_objects[i], camera, eRenderTypes::FORWARD);
+		renderNode(semitransparent_objects[i], camera, eRenderTypes::FORWARD); //this shouldnt override the depthmask
 	}
+	glDepthMask(true);
 	glDisable(GL_BLEND);
 
 	//irradiance pass
@@ -690,19 +712,6 @@ void Renderer::renderSceneDeferred(SCN::Scene* scene, Camera* camera) {
 
 		glDisable(GL_BLEND);
 		glDepthMask(true);
-	}
-
-	glEnable(GL_DEPTH_TEST);
-	glDepthFunc(GL_LESS);
-
-	if (show_irr_probes) {
-		renderAllProbes(irr_probe_size);
-	}
-
-	if (show_ref_probes) {
-		for (int i = 0; i < reflection_probes.size(); i++) {
-			renderReflectionProbe(*reflection_probes.at(i), 10.0);
-		}
 	}
 
 	linear_fbo->unbind();
