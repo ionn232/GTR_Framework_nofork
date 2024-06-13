@@ -1546,40 +1546,9 @@ vec3 ComputeSHIrradiance(in vec3 normal, in SH9Color sh)
 	return irradiance;
 }
 
-void main() {
-	vec2 uv = gl_FragCoord.xy * u_invRes.xy;
-	vec3 light = vec3(0.0, 0.0, 0.0);
-	vec3 color = texture( u_color_texture, uv ).xyz;
-	float depth = texture(u_depth_texture, uv).x;
-	vec3 N = texture(u_normal_texture, uv).xyz * 2.0 - vec3(1.0);
-	N = normalize(N);
-	float metalness = texture( u_mat_properties_texture, uv).g;
-	float shininess =  texture( u_mat_properties_texture, uv).b;
-
-	if(depth == 1.0) {
-		discard;
-	}
-
-	//reconstruct world position from depth and inv. viewproj
-	vec4 screen_pos = vec4(uv.x*2.0-1.0, uv.y*2.0-1.0, depth*2.0-1.0, 1.0);
-	vec4 proj_worldpos = u_inverse_viewprojection * screen_pos;
-	vec3 worldpos = proj_worldpos.xyz / proj_worldpos.w;
-
-	vec3 V = normalize(u_camera_position - worldpos);
-
-
-	//computing nearest probe index based on world position
-	vec3 irr_range = u_irr_end - u_irr_start;
-	vec3 irr_local_pos = clamp( worldpos - u_irr_start + N * u_irr_normal_distance, vec3(0.0), irr_range );
-
-	//convert from world pos to grid pos
-	vec3 irr_norm_pos = irr_local_pos / u_irr_delta;
-
-	//round values as we cannot fetch between rows for now
-	vec3 local_indices = round( irr_norm_pos );
-
+vec3 irradianceInProbe(in vec3 indices, in vec3 N) {
 	//compute in which row is the probe stored
-	float row = local_indices.x + local_indices.y * u_irr_dims.x + local_indices.z * u_irr_dims.x * u_irr_dims.y;
+	float row = indices.x + indices.y * u_irr_dims.x + indices.z * u_irr_dims.x * u_irr_dims.y;
 
 	//find the UV.y coord of that row in the probes texture
 	float row_uv = (row + 1.0) / (u_num_probes + 1.0);
@@ -1597,5 +1566,70 @@ void main() {
 	//now we can use the coefficients to compute the irradiance
 	vec3 irradiance = ComputeSHIrradiance( N, sh );
 
-	FragColor = vec4(irradiance, 1.0);
+	return irradiance;
+}
+
+void main() {
+	vec2 uv = gl_FragCoord.xy * u_invRes.xy;
+	vec3 light = vec3(0.0, 0.0, 0.0);
+	vec3 color = texture( u_color_texture, uv ).xyz;
+	float depth = texture(u_depth_texture, uv).x;
+	vec3 N = texture(u_normal_texture, uv).xyz * 2.0 - vec3(1.0);
+	N = normalize(N);
+	float metalness = texture( u_mat_properties_texture, uv).g;
+	float shininess =  texture( u_mat_properties_texture, uv).b;
+
+	if (depth == 1.0) { discard; }
+
+	//reconstruct world position from depth and inv. viewproj
+	vec4 screen_pos = vec4(uv.x*2.0-1.0, uv.y*2.0-1.0, depth*2.0-1.0, 1.0);
+	vec4 proj_worldpos = u_inverse_viewprojection * screen_pos;
+	vec3 worldpos = proj_worldpos.xyz / proj_worldpos.w;
+
+	vec3 V = normalize(u_camera_position - worldpos);
+
+
+	//computing nearest probe index based on world position
+	vec3 irr_range = u_irr_end - u_irr_start;
+	vec3 irr_local_pos = clamp( worldpos - u_irr_start + N * u_irr_normal_distance, vec3(0.0), irr_range );
+
+	//convert from world pos to grid pos
+	vec3 irr_norm_pos = irr_local_pos / u_irr_delta;
+
+	//floor instead of round
+	vec3 local_indices = floor( irr_norm_pos );
+	//now we have the interpolation factors
+	vec3 factors = irr_norm_pos - local_indices;
+
+	vec3 indices000 = local_indices;
+	vec3 indices001 = local_indices + vec3(0.f,0.f,1.f);
+	vec3 indices011 = local_indices + vec3(0.f,1.f,1.f);
+	vec3 indices111 = local_indices + vec3(1.f,1.f,1.f);
+	vec3 indices110 = local_indices + vec3(1.f,1.f,0.f);
+	vec3 indices100 = local_indices + vec3(1.f,0.f,0.f);
+	vec3 indices101 = local_indices + vec3(1.f,0.f,1.f);
+	vec3 indices010 = local_indices + vec3(0.f,1.f,0.f);
+	
+	//compute irradiance for every corner
+	//consult the handy irradiance diagram (data folder) for guidance
+	vec3 irr000 = irradianceInProbe( indices000, N);
+	vec3 irr001 = irradianceInProbe( indices001, N);
+	vec3 irr011 = irradianceInProbe( indices011, N);
+	vec3 irr111 = irradianceInProbe( indices111, N);
+	vec3 irr110 = irradianceInProbe( indices110, N);
+	vec3 irr100 = irradianceInProbe( indices100, N);
+	vec3 irr101 = irradianceInProbe( indices101, N);
+	vec3 irr010 = irradianceInProbe( indices010, N);
+
+	vec3 irr00 = mix( irr000, irr100, factors.x );
+	vec3 irr01 = mix( irr010, irr110, factors.x );
+	vec3 irr10 = mix( irr001, irr101, factors.x );
+	vec3 irr11 = mix( irr011, irr111, factors.x );
+
+	vec3 irr0 = mix( irr00, irr10, factors.z );
+	vec3 irr1 = mix( irr01, irr11, factors.z );
+
+	vec3 irr = mix( irr0, irr1, factors.y );
+
+	FragColor = vec4(color.xyz * irr, 1.0);
 }

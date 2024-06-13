@@ -663,9 +663,6 @@ void Renderer::renderSceneDeferred(SCN::Scene* scene, Camera* camera) {
 	//TODO mejorar opcion UI
 	if (show_probes) {
 		glEnable(GL_DEPTH_TEST);
-		glDepthFunc(GL_LEQUAL);
-		glDepthMask(true);
-
 		renderAllProbes(1.0f);
 	}
 
