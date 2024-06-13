@@ -263,7 +263,7 @@ float computeShadowSP(vec3 wp, int i){
 
 	//read depth from depth buffer in [0..+1] non-linear
 	//accounts for offset using shadowmap dimensions and id
-	float shadow_depth = texture( u_shadowmap, vec2(shadow_uv.x*(1.0/u_shadowmap_dimensions)+(1.0/u_shadowmap_dimensions)*(u_shadowmap_index[i]%u_shadowmap_dimensions),	 shadow_uv.y*(1.0/u_shadowmap_dimensions)+(1.0/u_shadowmap_dimensions)*floor(float(u_shadowmap_index[i])/float(u_shadowmap_dimensions)))).x;
+	float shadow_depth = texture( u_shadowmap, vec2(shadow_uv.x*(1.0/u_shadowmap_dimensions)+(1.0/u_shadowmap_dimensions)*(u_shadowmap_index[i]%u_shadowmap_dimensions),	 shadow_uv.y*(1.0/u_shadowmap_dimensions)+(1.0/u_shadowmap_dimensions)*floor(float(u_shadowmap_index[i])/float(u_shadowmap_dimensions)))).x; //it just works
 
 	//compute final shadow factor by comparing
 	float shadow_factor = 1.0;
@@ -1491,6 +1491,11 @@ in vec2 v_uv;
 
 uniform sampler2D u_color_texture;
 uniform sampler2D u_normal_texture;
+
+uniform sampler2D u_ssao_map;
+uniform int u_occlusion_type;
+
+//unused TODO remove if not necessary
 uniform sampler2D u_mat_properties_texture;
 uniform sampler2D u_depth_texture;
 uniform sampler2D u_probes_texture;
@@ -1587,7 +1592,6 @@ void main() {
 	vec3 worldpos = proj_worldpos.xyz / proj_worldpos.w;
 
 	vec3 V = normalize(u_camera_position - worldpos);
-
 
 	//computing nearest probe index based on world position
 	vec3 irr_range = u_irr_end - u_irr_start;

@@ -52,7 +52,7 @@ Renderer::Renderer(const char* shader_atlas_filename)
 	probeCam->setPerspective(90, 1, 0.1, 1000);
 	probes_texture = nullptr;
 	irradiance_fbo = new GFX::FBO();
-	irradiance_fbo->create(64, 64, 1, GL_RGB, GL_FLOAT, false);
+	irradiance_fbo->create(64, 64, 1, GL_RGB, GL_FLOAT, true);
 	irradiance_fbo->color_textures[0]->setName("IRRADIANCE FBO");
 
 	if (!GFX::Shader::LoadAtlas(shader_atlas_filename))
@@ -643,14 +643,18 @@ void Renderer::renderSceneDeferred(SCN::Scene* scene, Camera* camera) {
 		irradiance_shader->setUniform("u_irr_dims", probes_info.dim);
 		irradiance_shader->setUniform("u_irr_delta", probes_info.delta);
 		irradiance_shader->setUniform("u_num_probes", probes_info.num_probes);
-		irradiance_shader->setUniform("u_irr_normal_distance", 5.0f); //TODO espabila
+		irradiance_shader->setUniform("u_irr_normal_distance", 7.0f);
 
 		irradiance_shader->setUniform("u_color_texture", gBuffersFBO->color_textures[0], 0);
 		irradiance_shader->setUniform("u_normal_texture", gBuffersFBO->color_textures[1], 1);
-		irradiance_shader->setUniform("u_mat_properties_texture", gBuffersFBO->color_textures[2], 2);
-		irradiance_shader->setUniform("u_depth_texture", gBuffersFBO->depth_texture, 3);
 
-		irradiance_shader->setUniform("u_probes_texture", probes_texture, 4);
+		deferred_global->setUniform("u_occlusion_type", occlusion_mode);
+		deferred_global->setUniform("u_ssao_map", (occlusion_mode != eSSAO::TEXTURE ? blurred_ssao->color_textures[0] : GFX::Texture::getWhiteTexture()), 2);
+
+		irradiance_shader->setUniform("u_mat_properties_texture", gBuffersFBO->color_textures[2], 3);
+		irradiance_shader->setUniform("u_depth_texture", gBuffersFBO->depth_texture, 4);
+
+		irradiance_shader->setUniform("u_probes_texture", probes_texture, 5);
 
 		irradiance_shader->setUniform("u_invRes", vec2(1.0 / size.x, 1.0 / size.y));
 		irradiance_shader->setUniform("u_inverse_viewprojection", camera->inverse_viewprojection_matrix);
@@ -707,10 +711,6 @@ void Renderer::renderProbeFaces(SCN::Scene*, Camera* camera) {
 	// Clear the color and the depth buffer
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 	GFX::checkGLErrors();
-
-	//render skybox
-	if (skybox_cubemap)
-		renderSkybox(skybox_cubemap);
 
 	//render entities
 	for (int i = 0; i < opaque_objects.size(); i++)
@@ -1258,7 +1258,6 @@ void SCN::Renderer::captureProbe(sProbe& p) {
 	p.sh = computeSH(images);
 }
 
-
 #ifndef SKIP_IMGUI
 
 void Renderer::showUI()
@@ -1303,6 +1302,12 @@ void Renderer::showUI()
 		ImGui::Combo("Display channel", (int*)&deferred_display, "DEFAULT\0COLOR\0NORMALS\0MATERIAL_PROPERTIES\0DEPTH\0EMISSIVE\0SSAO_result\0");
 		ImGui::Combo("Occlusion mode", (int*)&occlusion_mode, "TEXTURE\0SSAO\0SSAOplus\0");
 		ImGui::DragFloat("SSAO radius", &ssao_radius, 0.01f, 0.0f, 20.0f);
+		if (ImGui::Button("Capture Irradiance")) {
+			//now compute the coeffs for every probe
+			captureAllProbes(5.f);
+		}
+		ImGui::Checkbox("Show probes", &show_probes);
+		ImGui::Checkbox("Use irradience", &use_irradiance);
 	}
 	ImGui::Checkbox("Use tonemapper", &gui_use_tonemapper);
 	if (gui_use_tonemapper) {
@@ -1314,13 +1319,6 @@ void Renderer::showUI()
 		}
 	}
 
-	//TODO test debug noseque
-	if (ImGui::Button("Capture Irradiance")) {
-		//now compute the coeffs for every probe
-		captureAllProbes(5.f);
-	}
-	ImGui::Checkbox("Show probes", &show_probes);
-	ImGui::Checkbox("Use irradience", &use_irradiance);
 }
 
 #else

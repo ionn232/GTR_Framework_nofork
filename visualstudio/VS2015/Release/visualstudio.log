@@ -120,16 +120,16 @@ C:\Users\Simon\Desktop\GTR_Framework_nofork\src\pipeline\renderer.cpp(556,51): w
 C:\Users\Simon\Desktop\GTR_Framework_nofork\src\pipeline\renderer.cpp(556,51): warning C4244:         ]
 C:\Users\Simon\Desktop\GTR_Framework_nofork\src\pipeline\renderer.cpp(579,20): warning C4018: '<': no coinciden signed/unsigned
 C:\Users\Simon\Desktop\GTR_Framework_nofork\src\pipeline\renderer.cpp(620,20): warning C4018: '<': no coinciden signed/unsigned
-C:\Users\Simon\Desktop\GTR_Framework_nofork\src\pipeline\renderer.cpp(655,68): warning C4244: 'argumento': conversión de 'double' a 'T'; posible pérdida de datos
-C:\Users\Simon\Desktop\GTR_Framework_nofork\src\pipeline\renderer.cpp(655,68): warning C4244:         with
-C:\Users\Simon\Desktop\GTR_Framework_nofork\src\pipeline\renderer.cpp(655,68): warning C4244:         [
-C:\Users\Simon\Desktop\GTR_Framework_nofork\src\pipeline\renderer.cpp(655,68): warning C4244:             T=float
-C:\Users\Simon\Desktop\GTR_Framework_nofork\src\pipeline\renderer.cpp(655,68): warning C4244:         ]
-C:\Users\Simon\Desktop\GTR_Framework_nofork\src\pipeline\renderer.cpp(655,54): warning C4244: 'argumento': conversión de 'double' a 'T'; posible pérdida de datos
-C:\Users\Simon\Desktop\GTR_Framework_nofork\src\pipeline\renderer.cpp(655,54): warning C4244:         with
-C:\Users\Simon\Desktop\GTR_Framework_nofork\src\pipeline\renderer.cpp(655,54): warning C4244:         [
-C:\Users\Simon\Desktop\GTR_Framework_nofork\src\pipeline\renderer.cpp(655,54): warning C4244:             T=float
-C:\Users\Simon\Desktop\GTR_Framework_nofork\src\pipeline\renderer.cpp(655,54): warning C4244:         ]
+C:\Users\Simon\Desktop\GTR_Framework_nofork\src\pipeline\renderer.cpp(659,68): warning C4244: 'argumento': conversión de 'double' a 'T'; posible pérdida de datos
+C:\Users\Simon\Desktop\GTR_Framework_nofork\src\pipeline\renderer.cpp(659,68): warning C4244:         with
+C:\Users\Simon\Desktop\GTR_Framework_nofork\src\pipeline\renderer.cpp(659,68): warning C4244:         [
+C:\Users\Simon\Desktop\GTR_Framework_nofork\src\pipeline\renderer.cpp(659,68): warning C4244:             T=float
+C:\Users\Simon\Desktop\GTR_Framework_nofork\src\pipeline\renderer.cpp(659,68): warning C4244:         ]
+C:\Users\Simon\Desktop\GTR_Framework_nofork\src\pipeline\renderer.cpp(659,54): warning C4244: 'argumento': conversión de 'double' a 'T'; posible pérdida de datos
+C:\Users\Simon\Desktop\GTR_Framework_nofork\src\pipeline\renderer.cpp(659,54): warning C4244:         with
+C:\Users\Simon\Desktop\GTR_Framework_nofork\src\pipeline\renderer.cpp(659,54): warning C4244:         [
+C:\Users\Simon\Desktop\GTR_Framework_nofork\src\pipeline\renderer.cpp(659,54): warning C4244:             T=float
+C:\Users\Simon\Desktop\GTR_Framework_nofork\src\pipeline\renderer.cpp(659,54): warning C4244:         ]
 C:\Users\Simon\Desktop\GTR_Framework_nofork\src\pipeline\renderer.cpp(716,20): warning C4018: '<': no coinciden signed/unsigned
 C:\Users\Simon\Desktop\GTR_Framework_nofork\src\pipeline\renderer.cpp(721,20): warning C4018: '<': no coinciden signed/unsigned
 C:\Users\Simon\Desktop\GTR_Framework_nofork\src\pipeline\renderer.cpp(763,14): warning C4244: 'inicializando': conversión de 'double' a 'float'; posible pérdida de datos
@@ -167,9 +167,9 @@ C:\Users\Simon\Desktop\GTR_Framework_nofork\src\pipeline\renderer.cpp(1221,20): 
      Creando biblioteca ..\..\GTR.lib y objeto ..\..\GTR.exp
 LINK : warning LNK4098: la biblioteca predeterminada'LIBCMT' entra en conflicto con otras bibliotecas; use la biblioteca /NODEFAULTLIB:biblioteca
   Generando código
-  1 of 5957 functions (<0.1%) were compiled, the rest were copied from previous compilation.
+  2 of 5957 functions (<0.1%) were compiled, the rest were copied from previous compilation.
     0 functions were new in current compilation
-    66 functions had inline decision re-evaluated but remain unchanged
+    65 functions had inline decision re-evaluated but remain unchanged
   Generación de código finalizada
 glew32s.lib(glew.obj) : warning LNK4099: no se encontró PDB '' con 'glew32s.lib(glew.obj)' o en ''; se vinculará el objeto sin tener en cuenta información de depuración
   visualstudio.vcxproj -> C:\Users\Simon\Desktop\GTR_Framework_nofork\GTR.exe
