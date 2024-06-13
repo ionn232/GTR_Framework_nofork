@@ -657,6 +657,7 @@ void Renderer::renderSceneDeferred(SCN::Scene* scene, Camera* camera) {
 		quad->render(GL_TRIANGLES);
 
 		glDisable(GL_BLEND);
+		glDepthMask(true);
 	}
 
 	//TODO mejorar opcion UI
@@ -710,9 +711,9 @@ void Renderer::renderProbeFaces(SCN::Scene*, Camera* camera) {
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 	GFX::checkGLErrors();
 
-	//TODO decide if you render the skybox or not
-	//pros: idk
-	//cons: el ajenjo implica que es malo
+	//render skybox
+	if (skybox_cubemap)
+		renderSkybox(skybox_cubemap);
 
 	//render entities
 	for (int i = 0; i < opaque_objects.size(); i++)
