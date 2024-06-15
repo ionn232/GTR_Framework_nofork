@@ -42,10 +42,11 @@ Renderer::Renderer(const char* shader_atlas_filename)
 	gBuffersFBO = nullptr;
 	linear_fbo = nullptr;
 	ssao_fbo = nullptr;
-	blurred_fbo = nullptr;
+	fx_fbo = nullptr;
 	multi_probes_fbo = nullptr;
 	volumFBO = nullptr;
 	prevViewProj = Matrix44::IDENTITY;
+	prev_motionblur = nullptr;
 	ssao_positions = generateSpherePoints(128, 1, false); //IDEA: cambiar num puntos UI
 
 	if (!GFX::Shader::LoadAtlas(shader_atlas_filename))
@@ -322,21 +323,21 @@ void Renderer::renderScene(SCN::Scene* scene, Camera* camera) {
 
 	//skip further computations if an intermediate process has been selected as deferred type (viewport alredy filled)
 	if (!partial_render) {
+
 		//apply PostFX transformations to the render in linear color space
+		if (!fx_fbo || prevScreenSize.distance(size) > 0.0) {
+			delete fx_fbo;
+			fx_fbo = new GFX::FBO();
+			fx_fbo->create(size.x, size.y, 1, GL_RGBA, GL_FLOAT, false);
+			fx_fbo->color_textures[0]->setName("FX FBO");
+		}
 
 		//FX1: blur
 		if (blur_render) {
-			if (!blurred_fbo || prevScreenSize.distance(size) > 0.0) {
-				delete blurred_fbo;
-				blurred_fbo = new GFX::FBO();
-				blurred_fbo->create(size.x, size.y, 1, GL_RGBA, GL_FLOAT, false);
-				blurred_fbo->color_textures[0]->setName("BLURRED FBO");
-				//firstIteration = true;
-			}
-
+			glDisable(GL_DEPTH_TEST);
 			GFX::Shader* blur_shader = circular_blur ? GFX::Shader::Get("blur_circular") : GFX::Shader::Get("blur_neighbors");
 			blur_shader->enable();
-			blurred_fbo->bind();
+			fx_fbo->bind();
 			vec2 invRes = vec2(1.0 / linear_fbo->color_textures[0]->width, 1.0 / linear_fbo->color_textures[0]->height);
 			blur_shader->setUniform("u_raw", linear_fbo->color_textures[0], 0);
 			blur_shader->setUniform("u_depth_texture", linear_fbo->depth_texture, 1);
@@ -345,12 +346,41 @@ void Renderer::renderScene(SCN::Scene* scene, Camera* camera) {
 			blur_shader->setUniform("u_blur_dimensions", fx_blur);
 			glClear(GL_COLOR_BUFFER_BIT);
 			quad->render(GL_TRIANGLES);
-			blurred_fbo->unbind();
+			fx_fbo->unbind();
 			blur_shader->disable();
 
 			linear_fbo->bind();
-			blurred_fbo->color_textures[0]->toViewport();
+			fx_fbo->color_textures[0]->toViewport();
 			linear_fbo->unbind();
+		}
+
+		//FX2: motion_blur
+		if (use_motion_blur) {
+			glDisable(GL_DEPTH_TEST);
+			glDisable(GL_BLEND);
+			if (!prev_motionblur || prevScreenSize.distance(size) > 0.0) {
+				prev_motionblur = new GFX::FBO();
+				prev_motionblur->create(size.x, size.y, 1, GL_RGBA, GL_FLOAT, false);
+				prev_motionblur->color_textures[0]->setName("MOTION BLUR RESULTS");
+
+				prev_motionblur->bind();
+				linear_fbo->color_textures[0]->toViewport();
+				prev_motionblur->unbind();
+			}
+			linear_fbo->bind();
+			GFX::Shader* motion_blur = GFX::Shader::Get("motion_blur");
+			motion_blur->enable();
+			motion_blur->setUniform("u_render", linear_fbo->color_textures[0], 0);
+			motion_blur->setUniform("u_last_results", prev_motionblur->color_textures[0], 1);
+			motion_blur->setUniform("u_intensity", motion_blur_intensity);
+			quad->render(GL_TRIANGLES);
+			motion_blur->disable();
+			linear_fbo->unbind();
+
+			//save previous results
+			prev_motionblur->bind();
+			linear_fbo->color_textures[0]->toViewport();
+			prev_motionblur->unbind();
 		}
 
 		//final render computation in gamma color space
@@ -374,6 +404,7 @@ void Renderer::renderScene(SCN::Scene* scene, Camera* camera) {
 			gamma_shader->disable();
 		}
 	}
+	//log size to re-create FBOs on window resize
 	prevScreenSize = size;
 }
 
@@ -511,13 +542,13 @@ void Renderer::renderSceneDeferred(SCN::Scene* scene, Camera* camera) {
 		//create fbo
 		if (!ssao_fbo || prevScreenSize.distance(size) > 0.0) {
 			delete ssao_fbo;
-			delete blurred_fbo;
+			delete fx_fbo;
 			ssao_fbo = new GFX::FBO();
-			blurred_fbo = new GFX::FBO();
+			fx_fbo = new GFX::FBO();
 			ssao_fbo->create(size.x/2, size.y/2, 1, GL_RGB, GL_UNSIGNED_BYTE, false);
 			ssao_fbo->color_textures[0]->setName("RAW SSAO");
-			blurred_fbo->create(size.x, size.y, 1, GL_RGBA, GL_FLOAT, false);
-			blurred_fbo->color_textures[0]->setName("BLURRED FBO");
+			fx_fbo->create(size.x, size.y, 1, GL_RGBA, GL_FLOAT, false);
+			fx_fbo->color_textures[0]->setName("FX FBO");
 			//firstIteration = true;
 		}
 		ssao_fbo->bind();
@@ -545,7 +576,7 @@ void Renderer::renderSceneDeferred(SCN::Scene* scene, Camera* camera) {
 		ssao_shader->disable();
 		ssao_fbo->unbind();
 
-		//blur image using reprojection (results did not look good, no time to fix)
+		//blur image using reprojection (results look like shit, no time to fix) (points were recomputed each frame, not anymore)
 		/*
 		if (!firstIteration) {
 			GFX::Shader* ssao_blur_shader = GFX::Shader::Get("blur_reprojection");
@@ -572,8 +603,8 @@ void Renderer::renderSceneDeferred(SCN::Scene* scene, Camera* camera) {
 		//blur raw SSAO using neighbor pixels
 		GFX::Shader* ssao_blur_shader = circular_blur ? GFX::Shader::Get("blur_circular") : GFX::Shader::Get("blur_neighbors");
 		ssao_blur_shader->enable();
-		blurred_fbo->bind();
-		vec2 invRes = vec2(1.0 / blurred_fbo->color_textures[0]->width, 1.0 / blurred_fbo->color_textures[0]->height);
+		fx_fbo->bind();
+		vec2 invRes = vec2(1.0 / fx_fbo->color_textures[0]->width, 1.0 / fx_fbo->color_textures[0]->height);
 		ssao_blur_shader->setUniform("u_raw", ssao_fbo->color_textures[0], 0);
 		ssao_blur_shader->setUniform("u_depth_texture", gBuffersFBO->depth_texture, 1);
 		ssao_blur_shader->setUniform("u_invRes", invRes);
@@ -581,12 +612,12 @@ void Renderer::renderSceneDeferred(SCN::Scene* scene, Camera* camera) {
 		ssao_blur_shader->setUniform("u_blur_dimensions", vec2(3.0, 3.0));
 		glClear(GL_COLOR_BUFFER_BIT);
 		quad->render(GL_TRIANGLES);
-		blurred_fbo->unbind();
+		fx_fbo->unbind();
 		ssao_blur_shader->disable();
 	}
 	//SSAO to viewport if necessary
 	if (deferred_display == eDeferredDisplay::SSAO_result) {
-		blurred_fbo->color_textures[0]->toViewport();
+		fx_fbo->color_textures[0]->toViewport();
 		return;
 	}
 
@@ -597,9 +628,9 @@ void Renderer::renderSceneDeferred(SCN::Scene* scene, Camera* camera) {
 	glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
 
 	//render skybox
-	if (skybox_cubemap && !deferred_display==eDeferredDisplay::IRRADIANCE) //irradiance reuses the linear fbo so skip drawing skybox to display consistent results
+	if (skybox_cubemap && !(deferred_display == eDeferredDisplay::IRRADIANCE)) { //irradiance reuses the linear fbo so skip drawing skybox to display consistent results
 		renderSkybox(skybox_cubemap);
-
+	}
 
 	GFX::Shader* deferred_global = GFX::Shader::Get("deferred_global");
 	deferred_global->enable();
@@ -616,7 +647,7 @@ void Renderer::renderSceneDeferred(SCN::Scene* scene, Camera* camera) {
 	deferred_global->setUniform("u_depth_texture", gBuffersFBO->depth_texture, 3);
 
 	deferred_global->setUniform("u_occlusion_type", occlusion_mode);
-	deferred_global->setUniform("u_ssao_map", (occlusion_mode!=eSSAO::TEXTURE ? blurred_fbo->color_textures[0] : GFX::Texture::getWhiteTexture()), 4);
+	deferred_global->setUniform("u_ssao_map", (occlusion_mode!=eSSAO::TEXTURE ? fx_fbo->color_textures[0] : GFX::Texture::getWhiteTexture()), 4);
 
 	deferred_global->setUniform("u_invRes", vec2(1.0 / size.x, 1.0 / size.y));
 	deferred_global->setUniform("u_ambient_light", scene->ambient_light);
@@ -752,13 +783,13 @@ void Renderer::renderSceneDeferred(SCN::Scene* scene, Camera* camera) {
 	if (volumetric_light) {
 		if (!volumFBO || prevScreenSize.distance(size) > 0.0) {
 			delete volumFBO;
-			delete blurred_fbo;
+			delete fx_fbo;
 			volumFBO = new GFX::FBO();
 			volumFBO->create(size.x/2, size.y/2, 1, GL_RGBA, GL_FLOAT, false);
 			volumFBO->color_textures[0]->setName("Volumetric light render");
-			blurred_fbo = new GFX::FBO();
-			blurred_fbo->create(size.x, size.y, 1, GL_RGBA, GL_FLOAT, false);
-			blurred_fbo->color_textures[0]->setName("BLURRED FBO");
+			fx_fbo = new GFX::FBO();
+			fx_fbo->create(size.x, size.y, 1, GL_RGBA, GL_FLOAT, false);
+			fx_fbo->color_textures[0]->setName("FX FBO");
 		}
 		volumFBO->bind();
 		glDisable(GL_BLEND);
@@ -796,21 +827,21 @@ void Renderer::renderSceneDeferred(SCN::Scene* scene, Camera* camera) {
 		// blur raw volumetric render using neighbor pixels
 		GFX::Shader* vol_blur_shader = circular_blur ? GFX::Shader::Get("blur_circular") : GFX::Shader::Get("blur_neighbors");
 		vol_blur_shader->enable();
-		blurred_fbo->bind();
-		vec2 invRes = vec2(1.0 / blurred_fbo->color_textures[0]->width, 1.0 / blurred_fbo->color_textures[0]->height);
+		fx_fbo->bind();
+		vec2 invRes = vec2(1.0 / fx_fbo->color_textures[0]->width, 1.0 / fx_fbo->color_textures[0]->height);
 		vol_blur_shader->setUniform("u_raw", volumFBO->color_textures[0], 0);
 		vol_blur_shader->setUniform("u_depth_texture", gBuffersFBO->depth_texture, 1);
 		vol_blur_shader->setUniform("u_invRes", invRes);
 		vol_blur_shader->setUniform("u_blur_far", true);
-		vol_blur_shader->setUniform("u_blur_dimensions", vec2(3.0f, 3.0f));
+		vol_blur_shader->setUniform("u_blur_dimensions", vec2(5.0f, 5.0f));
 		glClear(GL_COLOR_BUFFER_BIT);
 		quad->render(GL_TRIANGLES);
-		blurred_fbo->unbind();
+		fx_fbo->unbind();
 		vol_blur_shader->disable();
 		
 		//show if necessary
 		if (deferred_display == eDeferredDisplay::VOLUMETRIC) {
-			blur_volumetric ? blurred_fbo->color_textures[0]->toViewport() : volumFBO->color_textures[0]->toViewport();
+			blur_volumetric ? fx_fbo->color_textures[0]->toViewport() : volumFBO->color_textures[0]->toViewport();
 			return;
 		}
 
@@ -819,7 +850,7 @@ void Renderer::renderSceneDeferred(SCN::Scene* scene, Camera* camera) {
 		glEnable(GL_BLEND);
 		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 		glDepthMask(false);
-		blur_volumetric ? blurred_fbo->color_textures[0]->toViewport() : volumFBO->color_textures[0]->toViewport();
+		blur_volumetric ? fx_fbo->color_textures[0]->toViewport() : volumFBO->color_textures[0]->toViewport();
 		glDepthMask(true);
 		glDisable(GL_BLEND);
 	}
@@ -1488,11 +1519,11 @@ void Renderer::showUI()
 			ImGui::RadioButton("Flat", (int*)&render_mode, (int)eRenderTypes::FLAT);
 			ImGui::RadioButton("Forward", (int*)&render_mode, (int)eRenderTypes::FORWARD);
 			ImGui::RadioButton("Deferred", (int*)&render_mode, (int)eRenderTypes::DEFERRED);
+			ImGui::EndCombo();
 		}
 	}
 	else if (render_mode == eRenderTypes::FORWARD) {
 		if (ImGui::BeginCombo("Render mode", "Forward")) {
-			//change render mode
 			ImGui::RadioButton("Flat", (int*) & render_mode, (int)eRenderTypes::FLAT);
 			ImGui::RadioButton("Forward", (int*)&render_mode, (int)eRenderTypes::FORWARD);
 			ImGui::RadioButton("Deferred", (int*)&render_mode, (int)eRenderTypes::DEFERRED);
@@ -1567,8 +1598,10 @@ void Renderer::showUI()
 		}
 	}
 	ImGui::Checkbox("Blur render", &blur_render);
-	ImGui::DragFloat("Blur (X)", &fx_blur.x, 1.00f, 1.0f, 50.0f);
-	ImGui::DragFloat("Blur (Y)", &fx_blur.y, 1.00f, 1.0f, 50.0f);
+	ImGui::DragFloat("Blur (X)", &fx_blur.x, 1.00f, 1.0f, 100.0f);
+	ImGui::DragFloat("Blur (Y)", &fx_blur.y, 1.00f, 1.0f, 100.0f);
+	ImGui::Checkbox("Motion blur", &use_motion_blur);
+	ImGui::DragFloat("Motion Blur Intensity", &motion_blur_intensity, 0.01f, 0.01f, 0.99f);
 }
 
 #else

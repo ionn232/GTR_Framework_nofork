@@ -21,6 +21,7 @@ irradiance quad.vs irradiance.fs
 reflection_probe basic.vs reflection_probe.fs
 //reflection quad.vs reflection.fs
 volumetric quad.vs volumetric.fs
+motion_blur quad.vs motion_blur.fs
 
 \basic.vs
 
@@ -2042,4 +2043,24 @@ void main() {
 	translucency = pow(translucency, 0.6);
 
 	FragColor = vec4(light, 1.0 - translucency);
+}
+
+\motion_blur.fs
+#version 330 core
+
+in vec2 v_uv;
+
+uniform sampler2D u_render;
+uniform sampler2D u_last_results;
+uniform float u_intensity;
+
+out vec4 FragColor;
+
+void main() {
+	vec4 color = texture2D( u_render , v_uv );
+	vec4 prev_frame = texture2D( u_last_results , v_uv );
+
+	vec4 final_color = (1.0 - u_intensity) * color + u_intensity * prev_frame;
+
+	FragColor = vec4( final_color.xyz, 1.0);
 }

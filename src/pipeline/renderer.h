@@ -99,6 +99,8 @@ namespace SCN {
 		bool blur_volumetric = true;
 		bool blur_render = false;
 		bool circular_blur = true;
+		bool use_motion_blur = true;
+		float motion_blur_intensity = 0.1f;
 		vec2 fx_blur = vec2(5.0, 5.0);
 
 		//tonemapper parameters
@@ -123,12 +125,14 @@ namespace SCN {
 		GFX::FBO* linear_fbo;
 
 		GFX::FBO* ssao_fbo; //current frame's occlusion
-		GFX::FBO* blurred_fbo; //blurring results for SSAO and volumetric render.
+		GFX::FBO* fx_fbo; //fbo to render post-processing effect such as blurring
 		float ssao_radius = 7.0f;
 		std::vector<vec3> ssao_positions;
-		Matrix44 prevViewProj; //for temporal reprojection in SSAO
+		Matrix44 prevViewProj; //for temporal reprojection in SSAO (unused)
 
 		GFX::FBO* volumFBO;
+
+		GFX::FBO* multi_probes_fbo;
 
 		//scene container
 		SCN::Scene* scene;
@@ -136,8 +140,6 @@ namespace SCN {
 		//window size
 		vec2 size;
 		vec2 prevScreenSize = vec2(0.0, 0.0); //to detect if fbos must be rebuilt
-
-		GFX::FBO* multi_probes_fbo;
 
 		//variables for irradiance computation
 		std::vector<sProbe> probes;
@@ -149,6 +151,7 @@ namespace SCN {
 		std::vector<sReflectionProbe*> reflection_probes;
 		Camera* reflectionCam;
 
+		GFX::FBO* prev_motionblur;
 
 		bool partial_render; //stop rendering at some intermediate point (to visualize gbuffers, ssao, etc.)
 
