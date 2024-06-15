@@ -1212,7 +1212,8 @@ void main() {
 in vec3 v_position;
 in vec2 v_uv;
 
-uniform sampler2D u_ssao_map;
+uniform bool u_blur_far;
+uniform sampler2D u_raw;
 uniform sampler2D u_depth_texture;
 
 uniform vec2 u_invRes;
@@ -1223,12 +1224,10 @@ void main() {
 	vec2 uv = gl_FragCoord.xy * u_invRes.xy;
 
 	float depth = texture(u_depth_texture, uv).x;
-	if (depth==1.0) {
-		discard;
-	}
 
-	float occlusion_factor = 0.0;
+	vec3 occlusion_factor = vec3(0.0);
 	float valid_pixels = pow(3.0, 2.0);
+	float alpha = texture(u_raw, uv).a;
 
 	float current_depth;
 	//blur by averaging the pixels on a 3*3 square centered on the current pixel.
@@ -1239,18 +1238,20 @@ void main() {
 				current_uv = vec2(float(i),float(j)) * u_invRes;
 				current_uv += uv;
 				current_uv += offset;
-				current_depth = texture(u_depth_texture, uv).x; //to avoid counting skybox pixels as valid occlusion data
-				if (current_uv.x < 0.0 || current_uv.x > 1.0 || current_uv.y < 0.0 || current_uv.y > 1.0 || current_depth == 1.0) {
+				current_depth = texture(u_depth_texture, current_uv).x; //to avoid counting skybox pixels as valid occlusion data
+				if (current_depth == 1.0 && !u_blur_far) {
+					valid_pixels -= 1.0;
+				}
+				else if (current_uv.x <= 0.0 || current_uv.x >= 1.0 || current_uv.y <= 0.0 || current_uv.y >= 1.0) {
 					valid_pixels -= 1.0;
 				}
 				else {
-					occlusion_factor += texture(u_ssao_map, current_uv).x;
+					occlusion_factor += texture(u_raw, current_uv).xyz;
 				}
 		}
 	}
 
-	FragColor.xyz = vec3(occlusion_factor/ valid_pixels);
-	FragColor.a = 1.0;
+	FragColor = vec4(occlusion_factor.xyz/vec3(valid_pixels), alpha);
 }
 
 \skybox.fs
@@ -1941,7 +1942,7 @@ void main() {
 					light += (light_color * 5.0) * shadow_factor * particle_density * translucency * (air_density * step_dist) * NdotL * att_factor;
 					
 				}
-				else if (u_light_type[i] == 3) {		//directional lights
+				else if (u_light_type[i] == 3) {		//directional lights (no shadow pixel computation because it looks like	SHIT)
 					//diffuse value
 					float NdotL = 1.0;
 

@@ -118,10 +118,12 @@ namespace SCN {
 		GFX::FBO* linear_fbo;
 
 		GFX::FBO* ssao_fbo; //current frame's occlusion
-		GFX::FBO* blurred_ssao; //occlusion results
+		GFX::FBO* blurred_fbo; //blurring results for SSAO and volumetric render.
 		float ssao_radius = 7.0f;
 		std::vector<vec3> ssao_positions;
 		Matrix44 prevViewProj; //for temporal reprojection in SSAO
+
+		GFX::FBO* volumFBO;
 
 		//scene container
 		SCN::Scene* scene;
@@ -141,6 +143,7 @@ namespace SCN {
 		//reflection probes
 		std::vector<sReflectionProbe*> reflection_probes;
 		Camera* reflectionCam;
+
 
 		bool partial_render; //stop rendering at some intermediate point (to visualize gbuffers, ssao, etc.)
 
