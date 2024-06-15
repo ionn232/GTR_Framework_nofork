@@ -17,6 +17,8 @@ tonemapper quad.vs tonemapper.fs
 probe basic.vs probe.fs
 irradiance quad.vs irradiance.fs
 reflection_probe basic.vs reflection_probe.fs
+//reflection quad.vs reflection.fs
+volumetric quad.vs volumetric.fs
 
 \basic.vs
 
@@ -1194,6 +1196,8 @@ void main() {
 	float occlusion_factor = 0.1 * current_occlusion + 0.9 * previous_occlusion;
 
 	//for some reason the depth is inconsistent and results incorrect :(
+	//should be in same coordinate space as they are both sampler2D textures
+	//i give up!
 	float prev_depth = texture(u_depth_texture, prev_uv).x;
 	if (prev_depth == 1.0) {occlusion_factor = 1.0;}
 
@@ -1492,11 +1496,13 @@ in vec2 v_uv;
 
 uniform sampler2D u_color_texture;
 uniform sampler2D u_normal_texture;
+uniform sampler2D u_probes_texture;
+uniform sampler2D u_depth_texture;
 
 //unused TODO remove if not necessary
 uniform sampler2D u_mat_properties_texture;
-uniform sampler2D u_depth_texture;
-uniform sampler2D u_probes_texture;
+
+
 
 uniform vec2 u_invRes;
 uniform mat4 u_inverse_viewprojection;
@@ -1509,7 +1515,11 @@ uniform vec3 u_irr_delta;
 uniform int u_num_probes;
 uniform float u_irr_normal_distance;
 
+uniform float u_irr_factor;
+
 uniform vec3 u_camera_position;
+
+uniform sampler2D u_probe_depth;
 
 out vec4 FragColor;
 
@@ -1582,8 +1592,11 @@ void main() {
 	float metalness = texture( u_mat_properties_texture, uv).g;
 	float shininess =  texture( u_mat_properties_texture, uv).b;
 
+	//depth debug
+	float buffer_depth =  texture(u_probe_depth, uv).x;
+
 	if (depth == 1.0) { discard; }
-	if (depth > gl_FragDepth) { discard; }
+	if (depth > buffer_depth) { discard; } //solves transparency issues when rendering probes
 
 	//reconstruct world position from depth and inv. viewproj
 	vec4 screen_pos = vec4(uv.x*2.0-1.0, uv.y*2.0-1.0, depth*2.0-1.0, 1.0);
@@ -1634,7 +1647,7 @@ void main() {
 
 	vec3 irr = mix( irr0, irr1, factors.y );
 
-	FragColor = vec4(color.xyz * irr, 1.0);
+	FragColor = vec4(color.xyz * irr * u_irr_factor, 1.0);
 }
 
 \reflection_probe.fs
@@ -1664,4 +1677,289 @@ void main()
 
 
 	FragColor = vec4(color, 1.0);
+}
+
+
+\reflection.fs
+/*
+#version 330 core
+
+in vec3 v_position;
+in vec2 v_uv;
+
+uniform sampler2D u_render;
+uniform sampler2D u_normals_gbuffer;
+uniform sampler2D u_mat_properties_gbuffer;
+uniform sampler2D u_depth_texture;
+uniform samplerCube u_reflection;
+
+uniform vec2 u_invRes;
+uniform mat4 u_inverse_viewprojection;
+uniform mat4 u_viewprojection;
+
+uniform vec3 u_irr_start;
+uniform vec3 u_irr_end;
+uniform vec3 u_irr_dims;
+uniform vec3 u_irr_delta;
+uniform int u_num_probes;
+uniform float u_irr_normal_distance;
+
+uniform vec3 u_camera_position;
+
+out vec4 FragColor;
+
+
+
+void main() {
+	vec2 uv = gl_FragCoord.xy * u_invRes.xy;
+	vec3 light = vec3(0.0, 0.0, 0.0);
+	vec3 color = texture( u_color_texture, uv ).xyz;
+	float depth = texture(u_depth_texture, uv).x;
+	vec3 N = texture(u_normal_texture, uv).xyz * 2.0 - vec3(1.0);
+	N = normalize(N);
+	float metalness = texture( u_mat_properties_texture, uv).g;
+	float shininess =  texture( u_mat_properties_texture, uv).b;
+
+	if (depth == 1.0) { discard; }
+	if (depth > gl_FragDepth) { discard; }
+
+	//reconstruct world position from depth and inv. viewproj
+	vec4 screen_pos = vec4(uv.x*2.0-1.0, uv.y*2.0-1.0, depth*2.0-1.0, 1.0);
+	vec4 proj_worldpos = u_inverse_viewprojection * screen_pos;
+	vec3 worldpos = proj_worldpos.xyz / proj_worldpos.w;
+
+	vec3 V = normalize(u_camera_position - worldpos);
+
+
+	FragColor = vec4(color.xyz * irr, 1.0);
+}
+*/
+
+
+\volumetric.fs
+
+#version 330 core
+
+const int MAX_LIGHTS = 25;
+const int MAX_ITERATIONS = 64;
+
+in vec3 v_position;
+in vec2 v_uv;
+
+uniform sampler2D u_depth_texture;
+uniform sampler2D u_normal_texture;
+
+uniform vec3 u_camera_position;
+uniform mat4 u_inverse_viewprojection;
+uniform mat4 u_viewprojection;
+uniform vec2 u_invRes; 
+
+uniform vec3 u_ambient_light;
+
+uniform float u_air_density;
+
+uniform sampler2D u_shadowmap;
+uniform mat4 u_shadow_viewproj[MAX_LIGHTS];
+uniform float u_shadow_bias[MAX_LIGHTS];
+uniform int u_shadowmap_index[MAX_LIGHTS];
+uniform int u_shadowmap_dimensions;
+
+uniform int u_num_lights;
+uniform int u_light_cast_shadows[MAX_LIGHTS];
+uniform vec3 u_light_col[MAX_LIGHTS];
+uniform int u_light_type[MAX_LIGHTS];
+uniform float u_max_distance[MAX_LIGHTS];
+uniform vec3 u_light_pos[MAX_LIGHTS];
+uniform vec3 u_light_front[MAX_LIGHTS];
+uniform vec2 u_cone_info[MAX_LIGHTS];
+
+uniform float u_time;
+
+out vec4 FragColor;
+
+float computeShadowSP(vec3 wp, int i){
+	//project our 3D position to the shadowmap
+	vec4 proj_pos = u_shadow_viewproj[i] * vec4(wp,1.0);
+
+	//from homogeneus space to clip space
+	vec2 shadow_uv = (proj_pos.xy / proj_pos.w);
+
+	//from clip space to uv space
+	shadow_uv = shadow_uv * 0.5 + vec2(0.5);
+	//it is outside on the sides
+	if( shadow_uv.x < 0.0 || shadow_uv.x > 1.0 || shadow_uv.y < 0.0 || shadow_uv.y > 1.0 ) {
+		return 1.0;
+	}
+
+	//get point depth [-1 .. +1] in non-linear space
+	float real_depth = (proj_pos.z - u_shadow_bias[i]) / proj_pos.w;
+
+	//normalize from [-1..+1] to [0..+1] still non-linear
+	real_depth = real_depth * 0.5 + 0.5;
+
+	//it is before near or behind far plane
+	if(real_depth < 0.0 || real_depth > 1.0) {
+		return 1.0;
+	}
+
+	//read depth from depth buffer in [0..+1] non-linear
+	//accounts for offset using shadowmap dimensions and id
+	float shadow_depth = texture( u_shadowmap, vec2(shadow_uv.x*(1.0/u_shadowmap_dimensions)+(1.0/u_shadowmap_dimensions)*(u_shadowmap_index[i]%u_shadowmap_dimensions),	 shadow_uv.y*(1.0/u_shadowmap_dimensions)+(1.0/u_shadowmap_dimensions)*floor(float(u_shadowmap_index[i])/float(u_shadowmap_dimensions)))).x; //it just works
+
+	//compute final shadow factor by comparing
+	float shadow_factor = 1.0;
+
+	//we can compare them, even if they are not linear
+	if( shadow_depth < real_depth ) {
+		shadow_factor = 0.0;
+	}
+	return shadow_factor;
+}
+
+float rand(vec2 n) { 
+	return fract(sin(dot(n, vec2(12.9898, 4.1414))) * 43758.5453);
+}
+
+float mod289(float x){return x - floor(x * (1.0 / 289.0)) * 289.0;}
+vec4 mod289(vec4 x){return x - floor(x * (1.0 / 289.0)) * 289.0;}
+vec4 perm(vec4 x){return mod289(((x * 34.0) + 1.0) * x);}
+float noise(vec3 p){
+    vec3 a = floor(p);
+    vec3 d = p - a;
+    d = d * d * (3.0 - 2.0 * d);
+
+    vec4 b = a.xxyy + vec4(0.0, 1.0, 0.0, 1.0);
+    vec4 k1 = perm(b.xyxy);
+    vec4 k2 = perm(k1.xyxy + b.zzww);
+
+    vec4 c = k2 + a.zzzz;
+    vec4 k3 = perm(c);
+    vec4 k4 = perm(c + 1.0);
+
+    vec4 o1 = fract(k3 * (1.0 / 41.0));
+    vec4 o2 = fract(k4 * (1.0 / 41.0));
+
+    vec4 o3 = o2 * d.z + o1 * (1.0 - d.z);
+    vec2 o4 = o3.yw * d.x + o3.xz * (1.0 - d.x);
+
+    return o4.y * d.y + o4.x * (1.0 - d.y);
+}
+
+
+
+void main() {
+	vec2 uv = gl_FragCoord.xy * u_invRes.xy;
+	float depth = texture(u_depth_texture, uv).x;
+	vec3 N = texture(u_normal_texture, uv).xyz * 2.0 - vec3(1.0);
+	N = normalize(N);
+
+	//reconstruct world position from depth and inv. viewproj
+	vec4 screen_pos = vec4(uv.x*2.0-1.0, uv.y*2.0-1.0, depth*2.0-1.0, 1.0);
+	vec4 proj_worldpos = u_inverse_viewprojection * screen_pos;
+	vec3 worldpos = proj_worldpos.xyz / proj_worldpos.w;
+
+	vec3 V = worldpos - u_camera_position;
+	float dist = min(length(V), 1000.0);
+	V /= dist;
+
+
+	//value initializations
+	float step_dist = dist / float(MAX_ITERATIONS);
+	vec3 step = V * step_dist;
+	vec3 current_pos = u_camera_position + step * rand(gl_FragCoord.xy);
+
+	float translucency = 1.0;
+	float air_density = u_air_density/100.0;
+
+	vec3 light = pow(u_ambient_light, vec3(2.2));
+	//initial light color as the interpolation of ambient light and directional lights (all 'global' lights, so no spot or point)
+	//this looks like shit
+	//for (int i=0; i<MAX_LIGHTS; i++) {
+	//	if (i<u_num_lights) {
+	//		if (u_light_type[i] == 3) { //DIRECTIONAL
+	//			light = mix(light,  pow(u_light_col[i], vec3(2.2)), vec3(0.5));
+	//		}
+	//	}
+	//}
+
+	for (int j=0; j<MAX_ITERATIONS; j++) {
+		for (int i=0; i<MAX_LIGHTS; i++) {
+			if (i<u_num_lights) {
+				//if fragment is under the shadow skip some computations to make the result more accurate
+				bool shadow_pixel = false;
+				if (computeShadowSP(worldpos, i) == 0.0) {
+					shadow_pixel = true;
+				}
+
+				vec3 light_color =  pow(u_light_col[i], vec3(2.2));
+				float particle_density = max(0.0, 
+					noise(current_pos * vec3(0.03, 0.04, 0.02) + vec3(u_time, 0.0, 0.0)) * 1.3
+					+ abs(current_pos.x * 0.0001) * (1.0-dist/1000.0)
+					- abs(current_pos.y * 0.0005)
+					+ abs(current_pos.z * 0.0001) * (1.0-dist/1000.0)
+					);
+
+				if (u_light_type[i] == 1 && !shadow_pixel) { 		//point lights
+					//diffuse value
+					vec3 L = u_light_pos[i] - current_pos;
+					L= normalize(L);
+					float NdotL = clamp(dot(N, L), 0.0, 1.0);
+				
+					float lightDist = distance(u_light_pos[i], current_pos);
+					float att_factor = u_max_distance[i] - lightDist;
+					att_factor = att_factor/u_max_distance[i];
+					att_factor = max(att_factor, 0.0);
+
+					light += (light_color * 5.0) * particle_density * translucency * (air_density * step_dist) * NdotL * att_factor;
+
+				}
+				else if (u_light_type[i] == 2 && !shadow_pixel) { 		//spot lights
+					//diffuse value
+					vec3 L = u_light_pos[i] - current_pos;
+					L= normalize(L);
+					float NdotL = clamp(dot(N, L), 0.0, 1.0);
+				
+					float lightDist = distance(u_light_pos[i], current_pos);
+					float att_factor = u_max_distance[i] - lightDist;
+					att_factor = att_factor/u_max_distance[i];
+					att_factor = max(att_factor, 0.0);
+
+					float cos_angle = dot(u_light_front[i], L);
+					if (cos_angle < u_cone_info[i].y) {
+						NdotL = 0.0;
+					}
+					else if (cos_angle < u_cone_info[i].x) {
+						NdotL *= (cos_angle - u_cone_info[i].y) / (u_cone_info[i].x - u_cone_info[i].y);
+					}
+
+					//shadow value
+					float shadow_factor = 1.0;
+					if (u_light_cast_shadows[i] == 1) {
+						shadow_factor = computeShadowSP(current_pos, i);
+					}
+
+					light += (light_color * 5.0) * shadow_factor * particle_density * translucency * (air_density * step_dist) * NdotL * att_factor;
+					
+				}
+				else if (u_light_type[i] == 3) {		//directional lights
+					//diffuse value
+					float NdotL = 1.0;
+
+					//shadow value
+					float shadow_factor = 1.0;
+					if (u_light_cast_shadows[i] == 1) {
+						shadow_factor = computeShadowSP(current_pos, i);
+					}
+					light += (light_color * 5.0) * shadow_factor * particle_density * translucency * (air_density * step_dist) * NdotL;
+				}
+			}
+		}
+		current_pos += step;
+		translucency -= air_density * step_dist;
+		if (translucency <= 0.0001) {break;}
+	}
+	translucency = clamp(translucency, 0.0, 1.0);
+	translucency = pow(translucency, 0.6);
+
+	FragColor = vec4(light, 1.0 - translucency);
 }

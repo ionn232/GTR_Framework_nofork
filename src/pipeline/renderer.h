@@ -30,6 +30,7 @@ enum eDeferredDisplay {
 	DEPTH, //IDEA: traducir de logaritmico a lineal, adaptar shader depth.fs
 	EMISSIVE,
 	SSAO_result,
+	IRRADIANCE,
 	COUNT
 };
 
@@ -89,7 +90,11 @@ namespace SCN {
 		bool use_irradiance = true;
 		bool show_irr_probes = false;
 		float irr_probe_size = 5.0f;
-		bool show_ref_probes = true;
+		float irr_factor = 1.0f;
+		float irr_normal_distance = 7.0f;
+		bool show_ref_probes = false;
+		bool volumetric_light = true;
+		float air_density = 0.06f;
 
 		//tonemapper parameters
 		float tmp_scale = 1.0f;

@@ -71,7 +71,7 @@ Renderer::Renderer(const char* shader_atlas_filename)
 		//define bounding of the grid and num probes
 		probes_info.start.set(-400, 0, -500);
 		probes_info.end.set(600, 300, 500);
-		probes_info.dim.set(15, 10, 15); //TODO: ajustar en UI
+		probes_info.dim.set(20, 15, 20); //TODO: ajustar en UI
 
 		//compute the vector from one corner to the other
 		vec3 delta = (probes_info.end - probes_info.start);
@@ -119,15 +119,9 @@ Renderer::Renderer(const char* shader_atlas_filename)
 	}
 
 	//reflection probes
-
-	//debug
-	//test_ref_probe.pos = vec3(0,80.f,0);
-	//test_ref_probe.cubemap = nullptr;
-	//reflection_probes.push_back(test_ref_probe);
-
-	reflection_probes.push_back(new sReflectionProbe({vec3(90,80,0), nullptr}));
-	reflection_probes.push_back(new sReflectionProbe({ vec3(0,80,0), nullptr }));
-	//end
+	//TO DO: some distribution maybe. This is scene-specific. Add more probes on the roof and such
+	reflection_probes.push_back(new sReflectionProbe({ vec3(-80,80,-100), nullptr}));
+	reflection_probes.push_back(new sReflectionProbe({ vec3(-50,80,233), nullptr }));
 }
 
 void Renderer::setupScene()
@@ -197,6 +191,7 @@ void Renderer::generateShadowmaps(Camera* main_camera) {
 		delete shadowmapAtlas;
 		shadowmapAtlas = new GFX::FBO();
 		shadowmapAtlas->setDepthOnly(shadowatlas_size, shadowatlas_size);
+		shadowmapAtlas->depth_texture->setName("SHADOWMAP ATLAS");
 	}
 	shadowmapAtlas->bind();
 	Camera camera;
@@ -347,7 +342,6 @@ void Renderer::renderScene(SCN::Scene* scene, Camera* camera) {
 		}
 	}
 	//update screen size
-	//linear_fbo->depth_texture->toViewport();
 	prevScreenSize = size;
 }
 
@@ -651,14 +645,11 @@ void Renderer::renderSceneDeferred(SCN::Scene* scene, Camera* camera) {
 		}
 	}
 	deferred_global->disable();
-	//reset relevant GL flags
-	glEnable(GL_DEPTH_TEST);
-	glDepthFunc(GL_LESS);
-
 
 	//render probes (important to do before rendering alpha nodes)
 	glEnable(GL_DEPTH_TEST);
 	glDepthFunc(GL_LESS);
+	glDisable(GL_BLEND);
 	if (show_irr_probes) {
 		renderAllProbes(irr_probe_size);
 	}
@@ -675,11 +666,10 @@ void Renderer::renderSceneDeferred(SCN::Scene* scene, Camera* camera) {
 		renderNode(semitransparent_objects[i], camera, eRenderTypes::FORWARD); //this shouldnt override the depthmask
 	}
 	glDepthMask(true);
-	glDisable(GL_BLEND);
 
 	//irradiance pass
 	if (probes_texture && use_irradiance) {
-		glEnable(GL_BLEND);
+		deferred_display == eDeferredDisplay::IRRADIANCE ? glDisable(GL_BLEND) : glEnable(GL_BLEND);
 		glBlendFunc(GL_SRC_ALPHA, GL_ONE);
 
 		glEnable(GL_DEPTH_TEST);
@@ -697,7 +687,7 @@ void Renderer::renderSceneDeferred(SCN::Scene* scene, Camera* camera) {
 		irradiance_shader->setUniform("u_irr_dims", probes_info.dim);
 		irradiance_shader->setUniform("u_irr_delta", probes_info.delta);
 		irradiance_shader->setUniform("u_num_probes", probes_info.num_probes);
-		irradiance_shader->setUniform("u_irr_normal_distance", 7.0f);
+		irradiance_shader->setUniform("u_irr_normal_distance", irr_normal_distance);
 
 		irradiance_shader->setUniform("u_color_texture", gBuffersFBO->color_textures[0], 0);
 		irradiance_shader->setUniform("u_normal_texture", gBuffersFBO->color_textures[1], 1);
@@ -706,12 +696,42 @@ void Renderer::renderSceneDeferred(SCN::Scene* scene, Camera* camera) {
 
 		irradiance_shader->setUniform("u_probes_texture", probes_texture, 4);
 
+		irradiance_shader->setUniform("u_probe_depth", linear_fbo->depth_texture, 5); //depth comparisons using gl_FragCoord are driving me insane
+
+		irradiance_shader->setUniform("u_irr_factor", irr_factor);
+
 		irradiance_shader->setUniform("u_invRes", vec2(1.0 / size.x, 1.0 / size.y));
 		irradiance_shader->setUniform("u_inverse_viewprojection", camera->inverse_viewprojection_matrix);
 		quad->render(GL_TRIANGLES);
 
 		glDisable(GL_BLEND);
 		glDepthMask(true);
+	}
+
+	if (volumetric_light) {
+		glEnable(GL_DEPTH_TEST);
+		glDepthFunc(GL_LEQUAL);
+		glEnable(GL_BLEND);
+		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+		glDepthMask(false);
+		//upload necessary shader uniforms
+		GFX::Shader* vol_shader = GFX::Shader::Get("volumetric");
+		vol_shader->enable();
+		vol_shader->setUniform("u_depth_texture", gBuffersFBO->depth_texture, 0);
+		vol_shader->setUniform("u_normal_texture", gBuffersFBO->color_textures[1], 1);
+		vol_shader->setUniform("u_shadowmap", shadowmapAtlas->depth_texture, 2);
+		vol_shader->setUniform("u_shadowmap_dimensions", getSMapdDimensions(numShadowmaps));
+		vol_shader->setUniform("u_inverse_viewprojection", camera->inverse_viewprojection_matrix);
+		cameraToShader(camera, vol_shader);
+		vol_shader->setUniform("u_invRes", vec2(1.0 / size.x, 1.0 / size.y));
+		vol_shader->setUniform("u_ambient_light", scene->ambient_light);
+		vol_shader->setUniform("u_air_density", air_density);
+		vol_shader->setUniform("u_time", (float)getTime() * 0.001f);
+		lightToShaderSP(vol_shader);
+		//render
+		quad->render(GL_TRIANGLES);
+		glDepthMask(true);
+		glDisable(GL_BLEND);
 	}
 
 	linear_fbo->unbind();
@@ -1163,7 +1183,7 @@ void SCN::Renderer::lightToShaderSP(GFX::Shader* shader) {
 	for (int i = 0; i < num_lights; i++) {
 		light_positions[i] = lights[i]->root.model.getTranslation();
 		light_fronts[i] = lights[i]->root.model.frontVector().normalize();
-		light_colors[i] = lights[i]->color * lights[i]->intensity;
+		light_colors[i] = lights[i]->color * lights[i]->intensity; //IDEA: this should be done in gamma space, send to gpu
 		Vector2f currentCone = Vector2f(cos(lights[i]->cone_info.x * (PI/180.0)), cos(lights[i]->cone_info.y * (PI / 180.0))); //convert angles to cosinus
 		cones_info[i] = currentCone;
 		max_distances[i] = lights[i]->max_distance;
@@ -1404,11 +1424,11 @@ void Renderer::showUI()
 			ImGui::RadioButton("Deferred", (int*)&render_mode, (int)eRenderTypes::DEFERRED);
 			ImGui::EndCombo();
 		}
-		ImGui::Combo("Display channel", (int*)&deferred_display, "DEFAULT\0COLOR\0NORMALS\0MATERIAL_PROPERTIES\0DEPTH\0EMISSIVE\0SSAO_result\0");
+		ImGui::Combo("Display channel", (int*)&deferred_display, "DEFAULT\0COLOR\0NORMALS\0MATERIAL_PROPERTIES\0DEPTH\0EMISSIVE\0SSAO_result\0IRRADIANCE\0");
 		ImGui::Combo("Occlusion mode", (int*)&occlusion_mode, "TEXTURE\0SSAO\0SSAOplus\0");
 		ImGui::DragFloat("SSAO radius", &ssao_radius, 0.01f, 0.0f, 20.0f);
-		ImGui::Checkbox("Use irradience", &use_irradiance);
-		if (use_irradiance && ImGui::BeginCombo("Irradiance", "Show options")) {
+		if (ImGui::BeginCombo("Irradiance", "Show options")) {
+			ImGui::Checkbox("Use irradience", &use_irradiance);
 			if (ImGui::Button("Capture Irradiance")) {
 				//compute probe coefficients and save to disk
 				captureAllProbes();
@@ -1428,6 +1448,8 @@ void Renderer::showUI()
 			}
 			ImGui::Checkbox("Show irradiance probes", &show_irr_probes);
 			ImGui::DragFloat("Probe size", &irr_probe_size, 0.01f, 1.0f, 10.0f);
+			ImGui::DragFloat("Irradiance weight", &irr_factor, 0.01f, 0.01f, 10.0f);
+			ImGui::DragFloat("Irradiance normal factor", &irr_normal_distance, 0.01f, 0.01f, 15.0f);
 			ImGui::EndCombo();
 		}
 		if (ImGui::BeginCombo("Reflections", "Show options")) {
@@ -1440,6 +1462,8 @@ void Renderer::showUI()
 			}
 			ImGui::EndCombo();
 		}
+		ImGui::Checkbox("Volumetric lights", &volumetric_light);
+		ImGui::DragFloat("Air density", &air_density, 0.001f, 0.0f, 10.0f);
 	}
 	ImGui::Checkbox("Use tonemapper", &gui_use_tonemapper);
 	if (gui_use_tonemapper) {
