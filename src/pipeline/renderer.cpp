@@ -326,6 +326,14 @@ void Renderer::renderScene(SCN::Scene* scene, Camera* camera) {
 
 		//FX1: blur
 		if (blur_render) {
+			if (!blurred_fbo || prevScreenSize.distance(size) > 0.0) {
+				delete blurred_fbo;
+				blurred_fbo = new GFX::FBO();
+				blurred_fbo->create(size.x, size.y, 1, GL_RGBA, GL_FLOAT, false);
+				blurred_fbo->color_textures[0]->setName("BLURRED FBO");
+				//firstIteration = true;
+			}
+
 			GFX::Shader* blur_shader = circular_blur ? GFX::Shader::Get("blur_circular") : GFX::Shader::Get("blur_neighbors");
 			blur_shader->enable();
 			blurred_fbo->bind();
