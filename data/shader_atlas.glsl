@@ -1873,8 +1873,9 @@ void main() {
 	float air_density = u_air_density/100.0;
 
 	vec3 light = pow(u_ambient_light, vec3(2.2));
+	
 	//initial light color as the interpolation of ambient light and directional lights (all 'global' lights, so no spot or point)
-	//this looks like shit
+	//this looks like shit, scrapped
 	//for (int i=0; i<MAX_LIGHTS; i++) {
 	//	if (i<u_num_lights) {
 	//		if (u_light_type[i] == 3) { //DIRECTIONAL

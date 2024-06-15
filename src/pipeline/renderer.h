@@ -31,6 +31,7 @@ enum eDeferredDisplay {
 	EMISSIVE,
 	SSAO_result,
 	IRRADIANCE,
+	VOLUMETRIC,
 	COUNT
 };
 
@@ -95,6 +96,7 @@ namespace SCN {
 		bool show_ref_probes = false;
 		bool volumetric_light = true;
 		float air_density = 0.06f;
+		bool blur_volumetric = true;
 
 		//tonemapper parameters
 		float tmp_scale = 1.0f;

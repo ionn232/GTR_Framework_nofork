@@ -342,7 +342,6 @@ void Renderer::renderScene(SCN::Scene* scene, Camera* camera) {
 			gamma_shader->disable();
 		}
 	}
-	//update screen size
 	prevScreenSize = size;
 }
 
@@ -565,7 +564,7 @@ void Renderer::renderSceneDeferred(SCN::Scene* scene, Camera* camera) {
 	glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
 
 	//render skybox
-	if (skybox_cubemap)
+	if (skybox_cubemap && !deferred_display==eDeferredDisplay::IRRADIANCE) //irradiance reuses the linear fbo so skip drawing skybox to display consistent results
 		renderSkybox(skybox_cubemap);
 
 
@@ -706,6 +705,13 @@ void Renderer::renderSceneDeferred(SCN::Scene* scene, Camera* camera) {
 
 		glDisable(GL_BLEND);
 		glDepthMask(true);
+
+		//show results if necessary
+		if (deferred_display == eDeferredDisplay::IRRADIANCE) {
+			linear_fbo->unbind();
+			linear_fbo->color_textures[0]->toViewport();
+			return;
+		}
 	}
 
 	linear_fbo->unbind();
@@ -713,9 +719,13 @@ void Renderer::renderSceneDeferred(SCN::Scene* scene, Camera* camera) {
 	if (volumetric_light) {
 		if (!volumFBO || prevScreenSize.distance(size) > 0.0) {
 			delete volumFBO;
+			delete blurred_fbo;
 			volumFBO = new GFX::FBO();
 			volumFBO->create(size.x/2, size.y/2, 1, GL_RGBA, GL_FLOAT, false);
 			volumFBO->color_textures[0]->setName("Volumetric light render");
+			blurred_fbo = new GFX::FBO();
+			blurred_fbo->create(size.x, size.y, 1, GL_RGBA, GL_FLOAT, false);
+			blurred_fbo->color_textures[0]->setName("BLURRED FBO");
 		}
 		volumFBO->bind();
 		glDisable(GL_BLEND);
@@ -724,7 +734,7 @@ void Renderer::renderSceneDeferred(SCN::Scene* scene, Camera* camera) {
 		//upload necessary shader uniforms
 		GFX::Shader* vol_shader = GFX::Shader::Get("volumetric");
 		vol_shader->enable();
-		vol_shader->setUniform("u_depth_texture", gBuffersFBO->depth_texture, 0);
+		vol_shader->setUniform("u_depth_texture", linear_fbo->depth_texture, 0);
 		vol_shader->setUniform("u_normal_texture", gBuffersFBO->color_textures[1], 1);
 		vol_shader->setUniform("u_shadowmap", shadowmapAtlas->depth_texture, 2);
 		vol_shader->setUniform("u_shadowmap_dimensions", getSMapdDimensions(numShadowmaps));
@@ -751,8 +761,6 @@ void Renderer::renderSceneDeferred(SCN::Scene* scene, Camera* camera) {
 		volumFBO->color_textures[0]->unbind();
 
 		// blur raw volumetric render using neighbor pixels
-		// results looked like SHIT so this is scrapped
-		/*
 		GFX::Shader* vol_blur_shader = GFX::Shader::Get("blur_neighbors");
 		vol_blur_shader->enable();
 		blurred_fbo->bind();
@@ -765,14 +773,19 @@ void Renderer::renderSceneDeferred(SCN::Scene* scene, Camera* camera) {
 		quad->render(GL_TRIANGLES);
 		blurred_fbo->unbind();
 		vol_blur_shader->disable();
-		*/
+		
+		//show if necessary
+		if (deferred_display == eDeferredDisplay::VOLUMETRIC) {
+			blur_volumetric ? blurred_fbo->color_textures[0]->toViewport() : volumFBO->color_textures[0]->toViewport();
+			return;
+		}
 
 		//blend results to main render
 		linear_fbo->bind();
 		glEnable(GL_BLEND);
 		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 		glDepthMask(false);
-		volumFBO->color_textures[0]->toViewport(); //blurred_fbo->color_textures[0]->toViewport();
+		blur_volumetric ? blurred_fbo->color_textures[0]->toViewport() : volumFBO->color_textures[0]->toViewport();
 		glDepthMask(true);
 		glDisable(GL_BLEND);
 	}
@@ -1467,7 +1480,7 @@ void Renderer::showUI()
 			ImGui::RadioButton("Deferred", (int*)&render_mode, (int)eRenderTypes::DEFERRED);
 			ImGui::EndCombo();
 		}
-		ImGui::Combo("Display channel", (int*)&deferred_display, "DEFAULT\0COLOR\0NORMALS\0MATERIAL_PROPERTIES\0DEPTH\0EMISSIVE\0SSAO_result\0IRRADIANCE\0");
+		ImGui::Combo("Display channel", (int*)&deferred_display, "DEFAULT\0COLOR\0NORMALS\0MATERIAL_PROPERTIES\0DEPTH\0EMISSIVE\0SSAO_result\0IRRADIANCE\0VOLUMETRIC\0");
 		ImGui::Combo("Occlusion mode", (int*)&occlusion_mode, "TEXTURE\0SSAO\0SSAOplus\0");
 		ImGui::DragFloat("SSAO radius", &ssao_radius, 0.01f, 0.0f, 20.0f);
 		if (ImGui::BeginCombo("Irradiance", "Show options")) {
@@ -1507,6 +1520,7 @@ void Renderer::showUI()
 		}
 		ImGui::Checkbox("Volumetric lights", &volumetric_light);
 		ImGui::DragFloat("Air density", &air_density, 0.001f, 0.0f, 10.0f);
+		ImGui::Checkbox("Blurring for volumetric render", &blur_volumetric);
 	}
 	ImGui::Checkbox("Use tonemapper", &gui_use_tonemapper);
 	if (gui_use_tonemapper) {
