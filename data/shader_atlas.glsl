@@ -9,6 +9,8 @@ view_emissive quad.vs emissive.fs
 ssao quad.vs ssao.fs
 blur_reprojection quad.vs blur_reprojection.fs
 blur_neighbors quad.vs blur_neighbors.fs
+//this shader murders the framerate
+blur_circular quad.vs blur_circular.fs
 skybox basic.vs skybox.fs
 depth quad.vs depth.fs
 multi basic.vs multi.fs
@@ -1206,8 +1208,8 @@ void main() {
 }
 
 \blur_neighbors.fs
-
 #version 330 core
+
 
 in vec3 v_position;
 in vec2 v_uv;
@@ -1215,6 +1217,8 @@ in vec2 v_uv;
 uniform bool u_blur_far;
 uniform sampler2D u_raw;
 uniform sampler2D u_depth_texture;
+
+uniform vec2 u_blur_dimensions;
 
 uniform vec2 u_invRes;
 
@@ -1225,34 +1229,108 @@ void main() {
 
 	float depth = texture(u_depth_texture, uv).x;
 
+	vec2 blur_dimensions = u_blur_dimensions;
+
 	vec3 occlusion_factor = vec3(0.0);
-	float valid_pixels = pow(3.0, 2.0);
+	float valid_pixels = blur_dimensions.x * blur_dimensions.y;
 	float alpha = texture(u_raw, uv).a;
 
-	float current_depth;
-	//blur by averaging the pixels on a 3*3 square centered on the current pixel.
+	float current_depth = 1.0;
 	vec2 current_uv;
-	vec2 offset = vec2(-1.0, -1.0) * u_invRes;
-	for (int i=0; i < 3; i++) {
-		for (int j=0; j < 3; j++) {
-				current_uv = vec2(float(i),float(j)) * u_invRes;
-				current_uv += uv;
-				current_uv += offset;
-				current_depth = texture(u_depth_texture, current_uv).x; //to avoid counting skybox pixels as valid occlusion data
-				if (current_depth == 1.0 && !u_blur_far) {
-					valid_pixels -= 1.0;
-				}
-				else if (current_uv.x <= 0.0 || current_uv.x >= 1.0 || current_uv.y <= 0.0 || current_uv.y >= 1.0) {
-					valid_pixels -= 1.0;
-				}
-				else {
-					occlusion_factor += texture(u_raw, current_uv).xyz;
-				}
+	vec2 offset = -blur_dimensions/2.0 * u_invRes;
+
+	if (!u_blur_far && depth == 1.0) {
+		FragColor = vec4( texture(u_raw, uv).xyz, alpha);
+		return;
+	}
+
+	//blur by averaging the pixels on a square of specified dimensions centered on the current pixel.
+	for (int i = 0; i < int(blur_dimensions.x); i++) {
+
+			for (int j=0; j < int(blur_dimensions.y); j++) {
+
+					current_uv = vec2(float(i),float(j)) * u_invRes + offset;
+					current_uv += uv;
+					current_depth = texture(u_depth_texture, current_uv).x; //to avoid counting skybox pixels as valid occlusion data
+					if (current_depth == 1.0 && !u_blur_far) {
+						valid_pixels -= 1.0;
+					}
+					else if (current_uv.x <= 0.0 || current_uv.x >= 1.0 || current_uv.y <= 0.0 || current_uv.y >= 1.0) {
+						valid_pixels -= 1.0;
+					}
+					else {
+						occlusion_factor += texture(u_raw, current_uv).xyz;
+					}
+
 		}
 	}
 
 	FragColor = vec4(occlusion_factor.xyz/vec3(valid_pixels), alpha);
 }
+
+
+\blur_circular.fs
+
+#version 330 core
+in vec3 v_position;
+in vec2 v_uv;
+uniform bool u_blur_far;
+uniform sampler2D u_raw;
+uniform sampler2D u_depth_texture;
+uniform vec2 u_blur_dimensions;
+uniform vec2 u_invRes;
+out vec4 FragColor;
+
+void main() {
+    vec2 uv = gl_FragCoord.xy * u_invRes.xy;
+
+    float depth = texture(u_depth_texture, uv).x;
+
+    vec2 blur_dimensions = u_blur_dimensions;
+    float radius = max(blur_dimensions.x, blur_dimensions.y) / 2.0;  // Radius for circular sampling
+
+    vec3 occlusion_factor = vec3(0.0);
+    float valid_pixels = 0.0;
+    float alpha = texture(u_raw, uv).a;
+
+	float current_depth = 1.0;
+    vec2 current_uv;
+    vec2 offset = -blur_dimensions / 2.0 * u_invRes;
+
+	if (!u_blur_far && depth == 1.0) {
+		FragColor = vec4( texture(u_raw, uv).xyz, alpha);
+		return;
+	}
+
+    // Blur by averaging the pixels within a circular area of specified radius centered on the current pixel.
+    for (int i = 0; i < blur_dimensions.x; i++) {
+        for (int j = 0; j < blur_dimensions.y; j++) {
+            current_uv = vec2(float(i), float(j)) * u_invRes + offset;
+            current_uv += uv;
+
+            // Check if the current offset is within the radius
+            vec2 delta = vec2(float(i) - blur_dimensions.x / 2.0, float(j) - blur_dimensions.y / 2.0);
+            if (length(delta) <= radius) {
+				current_depth = texture(u_depth_texture, current_uv).x; //to avoid counting skybox pixels as valid occlusion data
+				if (current_depth == 1.0 && !u_blur_far) {
+					continue;
+				}
+                else if (current_uv.x > 0.0 && current_uv.x < 1.0 && current_uv.y > 0.0 && current_uv.y < 1.0) {
+                    occlusion_factor += texture(u_raw, current_uv).xyz;
+                    valid_pixels += 1.0;
+                }
+            }
+        }
+    }
+
+    if (valid_pixels > 0.0) {
+        occlusion_factor /= valid_pixels;
+    }
+
+    FragColor = vec4(occlusion_factor, alpha);
+}
+
+
 
 \skybox.fs
 

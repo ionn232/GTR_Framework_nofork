@@ -302,6 +302,7 @@ void Renderer::renderShadowmap(const Matrix44 model, GFX::Mesh* mesh, SCN::Mater
 }
 
 void Renderer::renderScene(SCN::Scene* scene, Camera* camera) {
+	GFX::Mesh* quad = GFX::Mesh::getQuad();
 	this->scene = scene;
 	setupScene();
 	categorizeNodes(camera);
@@ -319,9 +320,32 @@ void Renderer::renderScene(SCN::Scene* scene, Camera* camera) {
 		renderSceneFlat(scene, camera);
 	}
 
-	GFX::Mesh* quad = GFX::Mesh::getQuad();
-	//apply tonemapper or regular de-gamma
+	//skip further computations if an intermediate process has been selected as deferred type (viewport alredy filled)
 	if (!partial_render) {
+		//apply PostFX transformations to the render in linear color space
+
+		//FX1: blur
+		if (blur_render) {
+			GFX::Shader* blur_shader = circular_blur ? GFX::Shader::Get("blur_circular") : GFX::Shader::Get("blur_neighbors");
+			blur_shader->enable();
+			blurred_fbo->bind();
+			vec2 invRes = vec2(1.0 / linear_fbo->color_textures[0]->width, 1.0 / linear_fbo->color_textures[0]->height);
+			blur_shader->setUniform("u_raw", linear_fbo->color_textures[0], 0);
+			blur_shader->setUniform("u_depth_texture", linear_fbo->depth_texture, 1);
+			blur_shader->setUniform("u_invRes", invRes);
+			blur_shader->setUniform("u_blur_far", true);
+			blur_shader->setUniform("u_blur_dimensions", fx_blur);
+			glClear(GL_COLOR_BUFFER_BIT);
+			quad->render(GL_TRIANGLES);
+			blurred_fbo->unbind();
+			blur_shader->disable();
+
+			linear_fbo->bind();
+			blurred_fbo->color_textures[0]->toViewport();
+			linear_fbo->unbind();
+		}
+
+		//final render computation in gamma color space
 		if (gui_use_tonemapper) {
 			GFX::Shader* tonemapper_shader = GFX::Shader::Get("tonemapper");
 			tonemapper_shader->enable();
@@ -538,14 +562,15 @@ void Renderer::renderSceneDeferred(SCN::Scene* scene, Camera* camera) {
 		} */
 		
 		//blur raw SSAO using neighbor pixels
-		GFX::Shader* ssao_blur_shader = GFX::Shader::Get("blur_neighbors");
+		GFX::Shader* ssao_blur_shader = circular_blur ? GFX::Shader::Get("blur_circular") : GFX::Shader::Get("blur_neighbors");
 		ssao_blur_shader->enable();
 		blurred_fbo->bind();
 		vec2 invRes = vec2(1.0 / blurred_fbo->color_textures[0]->width, 1.0 / blurred_fbo->color_textures[0]->height);
 		ssao_blur_shader->setUniform("u_raw", ssao_fbo->color_textures[0], 0);
 		ssao_blur_shader->setUniform("u_depth_texture", gBuffersFBO->depth_texture, 1);
 		ssao_blur_shader->setUniform("u_invRes", invRes);
-		ssao_blur_shader->setUniform("u_blur_far", true);
+		ssao_blur_shader->setUniform("u_blur_far", false);
+		ssao_blur_shader->setUniform("u_blur_dimensions", vec2(3.0, 3.0));
 		glClear(GL_COLOR_BUFFER_BIT);
 		quad->render(GL_TRIANGLES);
 		blurred_fbo->unbind();
@@ -761,7 +786,7 @@ void Renderer::renderSceneDeferred(SCN::Scene* scene, Camera* camera) {
 		volumFBO->color_textures[0]->unbind();
 
 		// blur raw volumetric render using neighbor pixels
-		GFX::Shader* vol_blur_shader = GFX::Shader::Get("blur_neighbors");
+		GFX::Shader* vol_blur_shader = circular_blur ? GFX::Shader::Get("blur_circular") : GFX::Shader::Get("blur_neighbors");
 		vol_blur_shader->enable();
 		blurred_fbo->bind();
 		vec2 invRes = vec2(1.0 / blurred_fbo->color_textures[0]->width, 1.0 / blurred_fbo->color_textures[0]->height);
@@ -769,6 +794,7 @@ void Renderer::renderSceneDeferred(SCN::Scene* scene, Camera* camera) {
 		vol_blur_shader->setUniform("u_depth_texture", gBuffersFBO->depth_texture, 1);
 		vol_blur_shader->setUniform("u_invRes", invRes);
 		vol_blur_shader->setUniform("u_blur_far", true);
+		vol_blur_shader->setUniform("u_blur_dimensions", vec2(3.0f, 3.0f));
 		glClear(GL_COLOR_BUFFER_BIT);
 		quad->render(GL_TRIANGLES);
 		blurred_fbo->unbind();
@@ -1448,6 +1474,7 @@ void Renderer::showUI()
 	ImGui::Checkbox("Boundaries", &render_boundaries);
 	ImGui::Checkbox("Disable lights", &disable_lights);
 	ImGui::SliderInt("10-5000", &gui_shadowmap_res, 10, 5000, "shadowmap resolution");
+	ImGui::Checkbox("Circular blurring", &circular_blur);
 	if (render_mode == eRenderTypes::FLAT) {
 		if (ImGui::BeginCombo("Render mode", "Flat")) {
 			ImGui::RadioButton("Flat", (int*)&render_mode, (int)eRenderTypes::FLAT);
@@ -1531,7 +1558,9 @@ void Renderer::showUI()
 			ImGui::EndCombo();
 		}
 	}
-
+	ImGui::Checkbox("Blur render", &blur_render);
+	ImGui::DragFloat("Blur (X)", &fx_blur.x, 1.00f, 1.0f, 50.0f);
+	ImGui::DragFloat("Blur (Y)", &fx_blur.y, 1.00f, 1.0f, 50.0f);
 }
 
 #else

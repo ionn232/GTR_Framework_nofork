@@ -97,6 +97,9 @@ namespace SCN {
 		bool volumetric_light = true;
 		float air_density = 0.06f;
 		bool blur_volumetric = true;
+		bool blur_render = false;
+		bool circular_blur = true;
+		vec2 fx_blur = vec2(5.0, 5.0);
 
 		//tonemapper parameters
 		float tmp_scale = 1.0f;
