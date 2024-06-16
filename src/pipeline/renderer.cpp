@@ -343,13 +343,15 @@ void Renderer::renderScene(SCN::Scene* scene, Camera* camera) {
 			blur_shader->setUniform("u_depth_texture", linear_fbo->depth_texture, 1);
 			blur_shader->setUniform("u_invRes", invRes);
 			blur_shader->setUniform("u_blur_far", true);
-			blur_shader->setUniform("u_blur_dimensions", fx_blur);
+			blur_shader->setUniform("u_blur_dimensions", fx_blur_res);
+			blur_shader->setUniform("u_blur_distance", fx_blur_dist);
 			glClear(GL_COLOR_BUFFER_BIT);
 			quad->render(GL_TRIANGLES);
 			fx_fbo->unbind();
 			blur_shader->disable();
 
 			linear_fbo->bind();
+			glClear(GL_COLOR_BUFFER_BIT);
 			fx_fbo->color_textures[0]->toViewport();
 			linear_fbo->unbind();
 		}
@@ -379,6 +381,7 @@ void Renderer::renderScene(SCN::Scene* scene, Camera* camera) {
 
 			//save previous results
 			prev_motionblur->bind();
+			glClear(GL_COLOR_BUFFER_BIT);
 			linear_fbo->color_textures[0]->toViewport();
 			prev_motionblur->unbind();
 		}
@@ -609,7 +612,8 @@ void Renderer::renderSceneDeferred(SCN::Scene* scene, Camera* camera) {
 		ssao_blur_shader->setUniform("u_depth_texture", gBuffersFBO->depth_texture, 1);
 		ssao_blur_shader->setUniform("u_invRes", invRes);
 		ssao_blur_shader->setUniform("u_blur_far", false);
-		ssao_blur_shader->setUniform("u_blur_dimensions", vec2(3.0, 3.0));
+		ssao_blur_shader->setUniform("u_blur_dimensions", vec2(4.0, 4.0));
+		ssao_blur_shader->setUniform("u_blur_distance", vec2(2.0, 2.0));
 		glClear(GL_COLOR_BUFFER_BIT);
 		quad->render(GL_TRIANGLES);
 		fx_fbo->unbind();
@@ -833,7 +837,8 @@ void Renderer::renderSceneDeferred(SCN::Scene* scene, Camera* camera) {
 		vol_blur_shader->setUniform("u_depth_texture", gBuffersFBO->depth_texture, 1);
 		vol_blur_shader->setUniform("u_invRes", invRes);
 		vol_blur_shader->setUniform("u_blur_far", true);
-		vol_blur_shader->setUniform("u_blur_dimensions", vec2(5.0f, 5.0f));
+		vol_blur_shader->setUniform("u_blur_dimensions", vec2(3.0f, 3.0f));
+		vol_blur_shader->setUniform("u_blur_distance", vec2(2.0f, 2.0f));
 		glClear(GL_COLOR_BUFFER_BIT);
 		quad->render(GL_TRIANGLES);
 		fx_fbo->unbind();
@@ -1598,8 +1603,10 @@ void Renderer::showUI()
 		}
 	}
 	ImGui::Checkbox("Blur render", &blur_render);
-	ImGui::DragFloat("Blur (X)", &fx_blur.x, 1.00f, 1.0f, 100.0f);
-	ImGui::DragFloat("Blur (Y)", &fx_blur.y, 1.00f, 1.0f, 100.0f);
+	ImGui::DragFloat("Blur (X)", &fx_blur_res.x, 1.00f, 1.0f, 100.0f);
+	ImGui::DragFloat("Blur (Y)", &fx_blur_res.y, 1.00f, 1.0f, 100.0f);
+	ImGui::DragFloat("Blur dist (X)", &fx_blur_dist.x, 1.00f, 1.0f, 10.0f);
+	ImGui::DragFloat("Blur dist (Y)", &fx_blur_dist.y, 1.00f, 1.0f, 10.0f);
 	ImGui::Checkbox("Motion blur", &use_motion_blur);
 	ImGui::DragFloat("Motion Blur Intensity", &motion_blur_intensity, 0.01f, 0.01f, 0.99f);
 }

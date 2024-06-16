@@ -1215,11 +1215,13 @@ void main() {
 in vec3 v_position;
 in vec2 v_uv;
 
-uniform bool u_blur_far;
 uniform sampler2D u_raw;
 uniform sampler2D u_depth_texture;
 
+uniform vec2 u_blur_distance;
 uniform vec2 u_blur_dimensions;
+
+uniform bool u_blur_far; //to remove ssao artifacts
 
 uniform vec2 u_invRes;
 
@@ -1231,12 +1233,14 @@ void main() {
 	float depth = texture(u_depth_texture, uv).x;
 
 	vec2 blur_dimensions = u_blur_dimensions;
+	vec2 blur_distance = u_blur_distance;
 
-	vec3 occlusion_factor = vec3(0.0);
+	vec3 sum = vec3(0.0);
 	float valid_pixels = blur_dimensions.x * blur_dimensions.y;
 	float alpha = texture(u_raw, uv).a;
 
 	float current_depth = 1.0;
+	vec3 current_color;
 	vec2 current_uv;
 	vec2 offset = -blur_dimensions/2.0 * u_invRes;
 
@@ -1247,26 +1251,23 @@ void main() {
 
 	//blur by averaging the pixels on a square of specified dimensions centered on the current pixel.
 	for (int i = 0; i < int(blur_dimensions.x); i++) {
-
-			for (int j=0; j < int(blur_dimensions.y); j++) {
-
-					current_uv = vec2(float(i),float(j)) * u_invRes + offset;
-					current_uv += uv;
-					current_depth = texture(u_depth_texture, current_uv).x; //to avoid counting skybox pixels as valid occlusion data
-					if (current_depth == 1.0 && !u_blur_far) {
-						valid_pixels -= 1.0;
-					}
-					else if (current_uv.x <= 0.0 || current_uv.x >= 1.0 || current_uv.y <= 0.0 || current_uv.y >= 1.0) {
-						valid_pixels -= 1.0;
-					}
-					else {
-						occlusion_factor += texture(u_raw, current_uv).xyz;
-					}
-
+		for (int j=0; j < int(blur_dimensions.y); j++) {
+			current_uv = vec2(float(i),float(j)) * u_invRes * blur_distance + offset;
+			current_uv += uv;
+			current_depth = texture(u_depth_texture, current_uv).x; //to avoid counting skybox pixels as valid occlusion data
+			current_color = texture(u_raw, current_uv).xyz;
+			if (current_depth == 1.0 && !u_blur_far) {
+				valid_pixels -= 1.0;
+			}
+			else if (current_uv.x <= 0.0 || current_uv.x >= 1.0 || current_uv.y <= 0.0 || current_uv.y >= 1.0) {
+				valid_pixels -= 1.0;
+			}
+			else {
+				sum += max(current_color, vec3(0.0));
+			}
 		}
 	}
-
-	FragColor = vec4(occlusion_factor.xyz/vec3(valid_pixels), alpha);
+	FragColor = vec4(sum.xyz/vec3(valid_pixels), alpha);
 }
 
 
@@ -1279,6 +1280,7 @@ uniform bool u_blur_far;
 uniform sampler2D u_raw;
 uniform sampler2D u_depth_texture;
 uniform vec2 u_blur_dimensions;
+uniform vec2 u_blur_distance;
 uniform vec2 u_invRes;
 out vec4 FragColor;
 
@@ -1288,6 +1290,7 @@ void main() {
     float depth = texture(u_depth_texture, uv).x;
 
     vec2 blur_dimensions = u_blur_dimensions;
+	vec2 blur_distance = u_blur_distance;
     float radius = max(blur_dimensions.x, blur_dimensions.y) / 2.0;  // Radius for circular sampling
 
     vec3 occlusion_factor = vec3(0.0);
@@ -1303,13 +1306,13 @@ void main() {
 		return;
 	}
 
-    // Blur by averaging the pixels within a circular area of specified radius centered on the current pixel.
+
     for (int i = 0; i < blur_dimensions.x; i++) {
         for (int j = 0; j < blur_dimensions.y; j++) {
-            current_uv = vec2(float(i), float(j)) * u_invRes + offset;
+            current_uv = vec2(float(i), float(j)) * u_invRes * blur_distance + offset;
             current_uv += uv;
 
-            // Check if the current offset is within the radius
+            //check if the current offset is within the radius
             vec2 delta = vec2(float(i) - blur_dimensions.x / 2.0, float(j) - blur_dimensions.y / 2.0);
             if (length(delta) <= radius) {
 				current_depth = texture(u_depth_texture, current_uv).x; //to avoid counting skybox pixels as valid occlusion data
@@ -1317,7 +1320,7 @@ void main() {
 					continue;
 				}
                 else if (current_uv.x > 0.0 && current_uv.x < 1.0 && current_uv.y > 0.0 && current_uv.y < 1.0) {
-                    occlusion_factor += texture(u_raw, current_uv).xyz;
+                    occlusion_factor += max(texture(u_raw, current_uv).xyz, vec3(0.0));
                     valid_pixels += 1.0;
                 }
             }
@@ -2059,8 +2062,9 @@ out vec4 FragColor;
 void main() {
 	vec4 color = texture2D( u_render , v_uv );
 	vec4 prev_frame = texture2D( u_last_results , v_uv );
+	vec4 final_color;
 
-	vec4 final_color = (1.0 - u_intensity) * color + u_intensity * prev_frame;
+	final_color = (1.0 - u_intensity) * color + u_intensity * prev_frame;
 
 	FragColor = vec4( final_color.xyz, 1.0);
 }

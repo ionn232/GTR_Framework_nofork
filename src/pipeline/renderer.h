@@ -100,8 +100,9 @@ namespace SCN {
 		bool blur_render = false;
 		bool circular_blur = true;
 		bool use_motion_blur = true;
-		float motion_blur_intensity = 0.1f;
-		vec2 fx_blur = vec2(5.0, 5.0);
+		float motion_blur_intensity = 0.25f;
+		vec2 fx_blur_res = vec2(5.0, 5.0);
+		vec2 fx_blur_dist = vec2(1.0, 1.0);
 
 		//tonemapper parameters
 		float tmp_scale = 1.0f;
