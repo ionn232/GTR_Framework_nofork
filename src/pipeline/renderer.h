@@ -101,11 +101,12 @@ namespace SCN {
 		bool blur_render = false;
 		bool circular_blur = true;
 		bool use_motion_blur = true;
-		float motion_blur_intensity = 0.25f;
+		float motion_blur_intensity = 0.45f;
 		vec2 fx_blur_res = vec2(5.0, 5.0);
 		vec2 fx_blur_dist = vec2(1.0, 1.0);
 		bool use_bloom = true;
-		bool bloom_color_banding = true;
+		bool color_banding = true;
+		float color_banding_factor = 1.005f;
 		float bloom_threshold = 0.3f;
 		int bloom_iterations = 3;
 

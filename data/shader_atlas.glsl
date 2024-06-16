@@ -22,6 +22,7 @@ reflection quad.vs reflection.fs
 volumetric quad.vs volumetric.fs
 motion_blur quad.vs motion_blur.fs
 bloom_pass quad.vs bloom_pass.fs
+color_banding quad.vs color_banding.fs
 
 \basic.vs
 
@@ -2108,7 +2109,7 @@ void main() {
 
 	final_color = (1.0 - u_intensity) * color + u_intensity * prev_frame;
 
-	FragColor = vec4( final_color.xyz, 1.0);
+	FragColor = vec4(final_color.xyz, 1.0);
 }
 
 
@@ -2120,7 +2121,6 @@ in vec2 v_uv;
 uniform sampler2D u_render;
 uniform float u_threshold;
 uniform vec2 u_invRes;
-uniform bool u_bloom_color_banding;
 
 out vec4 FragColor;
 
@@ -2128,15 +2128,35 @@ void main() {
 	vec4 color = texture2D( u_render , v_uv );
 	vec2 uv = gl_FragCoord.xy * u_invRes.xy;
 
-	float intensity = (color.r + color.g + color.b) / 3.0; //IDEA: mirar máximo en vez de average
+	float intensity = max(color.r, color.g); //IDEA: mirar máximo en vez de average
+	intensity = max(intensity, color.b);
 	if (intensity <= u_threshold) {
 		discard;
 	}
 
 	vec4 final_color = color;
-	if (u_bloom_color_banding) {
-		final_color.xyz = min(final_color.xyz, vec3(1.0));
-	}
 
 	FragColor = vec4(max(final_color.xyz, 0.0), 1);
+}
+
+\color_banding.fs
+
+#version 330 core
+
+in vec2 v_uv;
+
+uniform sampler2D u_render;
+uniform vec2 u_invRes;
+
+out vec4 FragColor;
+
+void main() {
+	vec4 color = texture2D( u_render , v_uv );
+	vec2 uv = gl_FragCoord.xy * u_invRes.xy;
+
+	vec4 final_color = color;
+
+	final_color.xyz = min(color.xyz, 1.0);
+
+	FragColor = vec4(final_color.xyz, final_color.a);
 }

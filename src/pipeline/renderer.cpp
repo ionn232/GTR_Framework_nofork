@@ -337,6 +337,26 @@ void Renderer::renderScene(SCN::Scene* scene, Camera* camera) {
 		glDisable(GL_DEPTH_TEST);
 		glDisable(GL_BLEND);
 
+		//FX0: color banding
+		if (color_banding) {
+			//apply color banding
+			GFX::Shader* limit_shader = GFX::Shader::Get("color_banding");
+			limit_shader->enable();
+			fx_fbo->bind();
+			vec2 invRes = vec2(1.0 / linear_fbo->color_textures[0]->width, 1.0 / linear_fbo->color_textures[0]->height);
+			limit_shader->setUniform("u_render", linear_fbo->color_textures[0], 0);
+			limit_shader->setUniform("u_invRes", invRes);
+			glClear(GL_COLOR_BUFFER_BIT);
+			quad->render(GL_TRIANGLES);
+			limit_shader->disable();
+			fx_fbo->unbind();
+
+			linear_fbo->bind();
+			glClear(GL_COLOR_BUFFER_BIT);
+			fx_fbo->color_textures[0]->toViewport();
+			linear_fbo->unbind();
+		}
+
 		//FX1: bloom
 		//this can easily be made with less FBOs
 		//and better performance
@@ -373,7 +393,6 @@ void Renderer::renderScene(SCN::Scene* scene, Camera* camera) {
 			bloom_shader->setUniform("u_render", linear_fbo->color_textures[0], 0);
 			bloom_shader->setUniform("u_threshold", bloom_threshold);
 			bloom_shader->setUniform("u_invRes", invRes);
-			bloom_shader->setUniform("u_bloom_color_banding", bloom_color_banding);
 			glClear(GL_COLOR_BUFFER_BIT);
 			quad->render(GL_TRIANGLES);
 			bloom_shader->disable();
@@ -1723,6 +1742,7 @@ void Renderer::showUI()
 			ImGui::EndCombo();
 		}
 	}
+	ImGui::Checkbox("Color banding", &color_banding);
 	ImGui::Checkbox("Blur render", &blur_render);
 	ImGui::DragFloat("Blur (X)", &fx_blur_res.x, 1.00f, 1.0f, 100.0f);
 	ImGui::DragFloat("Blur (Y)", &fx_blur_res.y, 1.00f, 1.0f, 100.0f);
@@ -1731,7 +1751,6 @@ void Renderer::showUI()
 	ImGui::Checkbox("Motion blur", &use_motion_blur);
 	ImGui::DragFloat("Motion Blur Intensity", &motion_blur_intensity, 0.01f, 0.01f, 0.99f);
 	ImGui::Checkbox("Activate bloom", &use_bloom);
-	ImGui::Checkbox("Bloom color banding", &bloom_color_banding);
 	ImGui::DragFloat("Bloom threshold", &bloom_threshold, 0.01f, 0.01f, 2.0f);
 	ImGui::DragInt("Bloom iterations", &bloom_iterations, 1, 1, 10);
 }
