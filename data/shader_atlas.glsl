@@ -9,7 +9,6 @@ view_emissive quad.vs emissive.fs
 ssao quad.vs ssao.fs
 blur_reprojection quad.vs blur_reprojection.fs
 blur_neighbors quad.vs blur_neighbors.fs
-//this shader murders the framerate
 blur_circular quad.vs blur_circular.fs
 skybox basic.vs skybox.fs
 depth quad.vs depth.fs
@@ -22,6 +21,7 @@ reflection_probe basic.vs reflection_probe.fs
 reflection quad.vs reflection.fs
 volumetric quad.vs volumetric.fs
 motion_blur quad.vs motion_blur.fs
+bloom_pass quad.vs bloom_pass.fs
 
 \basic.vs
 
@@ -1225,6 +1225,7 @@ uniform bool u_blur_far; //to remove ssao artifacts
 
 uniform vec2 u_invRes;
 
+uniform float u_set_alpha; //for use in bloom calculation
 out vec4 FragColor;
 
 void main() {
@@ -1238,11 +1239,14 @@ void main() {
 	vec3 sum = vec3(0.0);
 	float valid_pixels = blur_dimensions.x * blur_dimensions.y;
 	float alpha = texture(u_raw, uv).a;
+	if (u_set_alpha != 0.0) {
+		alpha = u_set_alpha;
+	}
 
 	float current_depth = 1.0;
 	vec3 current_color;
 	vec2 current_uv;
-	vec2 offset = -blur_dimensions/2.0 * u_invRes;
+	vec2 offset = - (blur_dimensions*blur_distance)/2.0 * u_invRes;
 
 	if (!u_blur_far && depth == 1.0) {
 		FragColor = vec4( texture(u_raw, uv).xyz, alpha);
@@ -1282,6 +1286,8 @@ uniform sampler2D u_depth_texture;
 uniform vec2 u_blur_dimensions;
 uniform vec2 u_blur_distance;
 uniform vec2 u_invRes;
+
+uniform float u_set_alpha;
 out vec4 FragColor;
 
 void main() {
@@ -1295,11 +1301,15 @@ void main() {
 
     vec3 occlusion_factor = vec3(0.0);
     float valid_pixels = 0.0;
-    float alpha = texture(u_raw, uv).a;
+
+	float alpha = texture(u_raw, uv).a;
+	if (u_set_alpha != 0.0) {
+		alpha = u_set_alpha;
+	}
 
 	float current_depth = 1.0;
     vec2 current_uv;
-    vec2 offset = -blur_dimensions / 2.0 * u_invRes;
+    vec2 offset = - (blur_dimensions * blur_distance) / 2.0 * u_invRes;
 
 	if (!u_blur_far && depth == 1.0) {
 		FragColor = vec4( texture(u_raw, uv).xyz, alpha);
@@ -2099,4 +2109,34 @@ void main() {
 	final_color = (1.0 - u_intensity) * color + u_intensity * prev_frame;
 
 	FragColor = vec4( final_color.xyz, 1.0);
+}
+
+
+\bloom_pass.fs
+#version 330 core
+
+in vec2 v_uv;
+
+uniform sampler2D u_render;
+uniform float u_threshold;
+uniform vec2 u_invRes;
+uniform bool u_bloom_color_banding;
+
+out vec4 FragColor;
+
+void main() {
+	vec4 color = texture2D( u_render , v_uv );
+	vec2 uv = gl_FragCoord.xy * u_invRes.xy;
+
+	float intensity = (color.r + color.g + color.b) / 3.0; //IDEA: mirar máximo en vez de average
+	if (intensity <= u_threshold) {
+		discard;
+	}
+
+	vec4 final_color = color;
+	if (u_bloom_color_banding) {
+		final_color.xyz = min(final_color.xyz, vec3(1.0));
+	}
+
+	FragColor = vec4(max(final_color.xyz, 0.0), 1);
 }

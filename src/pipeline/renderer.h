@@ -104,6 +104,10 @@ namespace SCN {
 		float motion_blur_intensity = 0.25f;
 		vec2 fx_blur_res = vec2(5.0, 5.0);
 		vec2 fx_blur_dist = vec2(1.0, 1.0);
+		bool use_bloom = true;
+		bool bloom_color_banding = true;
+		float bloom_threshold = 0.3f;
+		int bloom_iterations = 3;
 
 		//tonemapper parameters
 		float tmp_scale = 1.0f;
@@ -135,6 +139,8 @@ namespace SCN {
 		GFX::FBO* volumFBO;
 
 		GFX::FBO* multi_probes_fbo;
+
+		std::vector<GFX::FBO*> bloom_samples;
 
 		//scene container
 		SCN::Scene* scene;

@@ -334,9 +334,82 @@ void Renderer::renderScene(SCN::Scene* scene, Camera* camera) {
 			fx_fbo->color_textures[0]->setName("FX FBO");
 		}
 
-		//FX1: blur
+		glDisable(GL_DEPTH_TEST);
+		glDisable(GL_BLEND);
+
+		//FX1: bloom
+		//this can easily be made with less FBOs
+		//and better performance
+		//but I have an exam tomorrow
+		if (use_bloom) {
+			//(re)create as many FBOS as needed
+			if (bloom_samples.size() != bloom_iterations || prevScreenSize.distance(size) > 0.0) {
+				//free memory of previous FBOs
+				for (std::vector<GFX::FBO*>::iterator i = bloom_samples.begin(); i != bloom_samples.end(); ++i) {
+					delete* i;
+				}
+				bloom_samples.clear();
+
+				//create FBO for each layer
+				GFX::FBO* bloom_layer;
+				for (int i = 0; i < bloom_iterations; i++) {
+					//create fbo
+					bloom_layer = new GFX::FBO();
+					bloom_layer->create(size.x, size.y, 1, GL_RGBA, GL_FLOAT, false);
+					//set name
+					char buffer[50];
+					std::snprintf(buffer, sizeof(buffer), "BLOOM LAYER %d", i+1);
+					char* name = new char[std::strlen(buffer) + 1];
+					std::strcpy(name, buffer);
+					bloom_layer->color_textures[0]->setName(name);
+					bloom_samples.push_back(bloom_layer);
+				}
+			}
+			//isolate bright pixels
+			GFX::Shader* bloom_shader = GFX::Shader::Get("bloom_pass");
+			bloom_shader->enable();
+			fx_fbo->bind();
+			vec2 invRes = vec2(1.0 / linear_fbo->color_textures[0]->width, 1.0 / linear_fbo->color_textures[0]->height);
+			bloom_shader->setUniform("u_render", linear_fbo->color_textures[0], 0);
+			bloom_shader->setUniform("u_threshold", bloom_threshold);
+			bloom_shader->setUniform("u_invRes", invRes);
+			bloom_shader->setUniform("u_bloom_color_banding", bloom_color_banding);
+			glClear(GL_COLOR_BUFFER_BIT);
+			quad->render(GL_TRIANGLES);
+			bloom_shader->disable();
+			fx_fbo->unbind();
+
+			//downsample
+			GFX::Shader* blur_shader = circular_blur ? GFX::Shader::Get("blur_circular") : GFX::Shader::Get("blur_neighbors");
+			blur_shader->enable();
+			for (int i = 0; i < bloom_iterations; i++) {
+				bloom_samples.at(i)->bind();
+				invRes = vec2(1.0 / size.x, 1.0 / size.y);
+				blur_shader->setUniform("u_raw", i==0 ? fx_fbo->color_textures[0] : bloom_samples.at(i-1)->color_textures[0], 0);
+				blur_shader->setUniform("u_invRes", invRes);
+				blur_shader->setUniform("u_blur_far", true);
+				blur_shader->setUniform("u_blur_dimensions", vec2(9, 9));
+				blur_shader->setUniform("u_blur_distance", vec2(4, 4));
+				blur_shader->setUniform("u_set_alpha", 1.0f/float(bloom_iterations));
+				glClear(GL_COLOR_BUFFER_BIT);
+				quad->render(GL_TRIANGLES);
+				bloom_samples.at(i)->unbind();
+			}
+			blur_shader->disable();
+
+			//blend to render
+			glEnable(GL_BLEND);
+			glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+			linear_fbo->bind();
+			for (int i = 0; i < bloom_iterations; i++) {
+				bloom_samples.at(i)->color_textures[0]->toViewport();
+			}
+			linear_fbo->unbind();
+			glDisable(GL_BLEND);
+		}
+
+		//FX2: blur
 		if (blur_render) {
-			glDisable(GL_DEPTH_TEST);
 			GFX::Shader* blur_shader = circular_blur ? GFX::Shader::Get("blur_circular") : GFX::Shader::Get("blur_neighbors");
 			blur_shader->enable();
 			fx_fbo->bind();
@@ -358,7 +431,7 @@ void Renderer::renderScene(SCN::Scene* scene, Camera* camera) {
 			linear_fbo->unbind();
 		}
 
-		//FX2: motion_blur
+		//FX3: motion_blur
 		if (use_motion_blur) {
 			glDisable(GL_DEPTH_TEST);
 			glDisable(GL_BLEND);
@@ -388,7 +461,7 @@ void Renderer::renderScene(SCN::Scene* scene, Camera* camera) {
 			prev_motionblur->unbind();
 		}
 
-		//final render computation in gamma color space
+		//FX?4: tonemapper / gamma
 		if (gui_use_tonemapper) {
 			GFX::Shader* tonemapper_shader = GFX::Shader::Get("tonemapper");
 			tonemapper_shader->enable();
@@ -616,6 +689,7 @@ void Renderer::renderSceneDeferred(SCN::Scene* scene, Camera* camera) {
 		ssao_blur_shader->setUniform("u_blur_far", false);
 		ssao_blur_shader->setUniform("u_blur_dimensions", vec2(4.0, 4.0));
 		ssao_blur_shader->setUniform("u_blur_distance", vec2(2.0, 2.0));
+		ssao_blur_shader->setUniform("u_set_alpha", (float)0.0);
 		glClear(GL_COLOR_BUFFER_BIT);
 		quad->render(GL_TRIANGLES);
 		fx_fbo->unbind();
@@ -669,7 +743,7 @@ void Renderer::renderSceneDeferred(SCN::Scene* scene, Camera* camera) {
 	deferred_global->disable();
 
 
-	//render reflections TODO entre base render y light pass???
+	//render reflections
 	glDisable(GL_DEPTH_TEST);
 	glEnable(GL_BLEND);
 	glBlendFunc(GL_SRC_ALPHA, GL_ONE);
@@ -884,6 +958,7 @@ void Renderer::renderSceneDeferred(SCN::Scene* scene, Camera* camera) {
 		vol_blur_shader->setUniform("u_blur_far", true);
 		vol_blur_shader->setUniform("u_blur_dimensions", vec2(3.0f, 3.0f));
 		vol_blur_shader->setUniform("u_blur_distance", vec2(2.0f, 2.0f));
+		vol_blur_shader->setUniform("u_set_alpha", (float)0.0);
 		glClear(GL_COLOR_BUFFER_BIT);
 		quad->render(GL_TRIANGLES);
 		fx_fbo->unbind();
@@ -1545,7 +1620,7 @@ void SCN::Renderer::captureReflectionProbe(sReflectionProbe& s) {
 		vec3 up = cubemapFaceNormals[i][1];
 		probeCam->lookAt(eye, center, up);
 		probeCam->enable();
-		renderProbeFaces(scene, probeCam, false); //TODO bindea otro fbo, nueva funcion
+		renderProbeFaces(scene, probeCam, false);
 		multi_probes_fbo->unbind();
 	}
 	//generate the mipmaps
@@ -1655,6 +1730,10 @@ void Renderer::showUI()
 	ImGui::DragFloat("Blur dist (Y)", &fx_blur_dist.y, 1.00f, 1.0f, 10.0f);
 	ImGui::Checkbox("Motion blur", &use_motion_blur);
 	ImGui::DragFloat("Motion Blur Intensity", &motion_blur_intensity, 0.01f, 0.01f, 0.99f);
+	ImGui::Checkbox("Activate bloom", &use_bloom);
+	ImGui::Checkbox("Bloom color banding", &bloom_color_banding);
+	ImGui::DragFloat("Bloom threshold", &bloom_threshold, 0.01f, 0.01f, 2.0f);
+	ImGui::DragInt("Bloom iterations", &bloom_iterations, 1, 1, 10);
 }
 
 #else
