@@ -19,7 +19,7 @@ tonemapper quad.vs tonemapper.fs
 probe basic.vs probe.fs
 irradiance quad.vs irradiance.fs
 reflection_probe basic.vs reflection_probe.fs
-//reflection quad.vs reflection.fs
+reflection quad.vs reflection.fs
 volumetric quad.vs volumetric.fs
 motion_blur quad.vs motion_blur.fs
 
@@ -1764,8 +1764,10 @@ void main()
 
 
 \reflection.fs
-/*
+
 #version 330 core
+
+const int NUM_PROBES = 4;
 
 in vec3 v_position;
 in vec2 v_uv;
@@ -1774,37 +1776,35 @@ uniform sampler2D u_render;
 uniform sampler2D u_normals_gbuffer;
 uniform sampler2D u_mat_properties_gbuffer;
 uniform sampler2D u_depth_texture;
-uniform samplerCube u_reflection;
+uniform samplerCube u_reflection_0;
+uniform samplerCube u_reflection_1;
+uniform samplerCube u_reflection_2;
+uniform samplerCube u_reflection_3;
+
+uniform vec3 u_probe_pos[NUM_PROBES];
 
 uniform vec2 u_invRes;
 uniform mat4 u_inverse_viewprojection;
 uniform mat4 u_viewprojection;
-
-uniform vec3 u_irr_start;
-uniform vec3 u_irr_end;
-uniform vec3 u_irr_dims;
-uniform vec3 u_irr_delta;
-uniform int u_num_probes;
-uniform float u_irr_normal_distance;
 
 uniform vec3 u_camera_position;
 
 out vec4 FragColor;
 
 
-
 void main() {
 	vec2 uv = gl_FragCoord.xy * u_invRes.xy;
 	vec3 light = vec3(0.0, 0.0, 0.0);
-	vec3 color = texture( u_color_texture, uv ).xyz;
+	vec3 color = texture( u_render, uv ).xyz;
 	float depth = texture(u_depth_texture, uv).x;
-	vec3 N = texture(u_normal_texture, uv).xyz * 2.0 - vec3(1.0);
+	vec3 N = texture(u_normals_gbuffer, uv).xyz * 2.0 - vec3(1.0);
 	N = normalize(N);
-	float metalness = texture( u_mat_properties_texture, uv).g;
-	float shininess =  texture( u_mat_properties_texture, uv).b;
 
-	if (depth == 1.0) { discard; }
-	if (depth > gl_FragDepth) { discard; }
+	float metalness = texture( u_mat_properties_gbuffer, uv).g;
+	float shininess =  texture( u_mat_properties_gbuffer, uv).b;
+
+	//if (depth == 1.0) { discard; }
+	//if (depth > gl_FragDepth) { discard; }
 
 	//reconstruct world position from depth and inv. viewproj
 	vec4 screen_pos = vec4(uv.x*2.0-1.0, uv.y*2.0-1.0, depth*2.0-1.0, 1.0);
@@ -1813,10 +1813,42 @@ void main() {
 
 	vec3 V = normalize(u_camera_position - worldpos);
 
+	vec3 E = worldpos - u_camera_position;
+	vec3 R = reflect(E, N);
 
-	FragColor = vec4(color.xyz * irr, 1.0);
+	//get closest probe
+	float minDist = length(worldpos - u_probe_pos[0]);
+	int minProbe = 0;
+	for (int i=1; i < NUM_PROBES; i++) {
+		float currentDist = length(worldpos - u_probe_pos[i]);
+		if (currentDist < minDist) {
+			minDist = currentDist;
+			minProbe = i;
+		}
+	}
+
+
+	//there are infinitely better ways to do this, but there is infinitely less time to do them, the dilemma....
+	vec3 reflection_color = vec3(0.0);
+	if (minProbe == 0) {
+		reflection_color = textureLod(u_reflection_0, R, (1.0 - shininess) * 3.0).xyz; 
+	}
+	else if(minProbe == 1) {
+		reflection_color = textureLod(u_reflection_1, R, (1.0 - shininess) * 3.0).xyz;
+	}
+	else if(minProbe == 2) {
+		reflection_color = textureLod(u_reflection_2, R, (1.0 - shininess) * 3.0).xyz;
+	}
+	else if(minProbe == 3) {
+		reflection_color = textureLod(u_reflection_3, R, (1.0 - shininess) * 3.0).xyz;
+	}
+
+	//compute the reflection
+	vec3 reflection = color * reflection_color;
+
+	FragColor = vec4(pow(reflection, vec3(1/2.2)), metalness);
 }
-*/
+
 
 
 \volumetric.fs

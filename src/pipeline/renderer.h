@@ -6,6 +6,7 @@
 #include "../gfx/sphericalharmonics.h"
 
 #define MAX_LIGHTS_SP 25
+#define NUM_REFL_PROBES 4
 
 //forward declarations
 class Camera;

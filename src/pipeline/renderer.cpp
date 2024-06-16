@@ -1,6 +1,7 @@
 #include "renderer.h"
 
 #include <algorithm> //sort
+#include <format>
 
 #include "camera.h"
 #include "../gfx/gfx.h"
@@ -25,7 +26,6 @@ GFX::Mesh sphere;
 std::vector<SCN::Node*> opaque_objects;
 std::vector<SCN::Node*> semitransparent_objects;
 std::vector<LightEntity*> lights;
-//LightEntity* mainLight; //sunlight or equivalent (directional) light
 
 bool compareDist(Node* s1, Node* s2) { 
 	return s1->distance_to_camera > s2->distance_to_camera;
@@ -121,9 +121,11 @@ Renderer::Renderer(const char* shader_atlas_filename)
 	}
 
 	//reflection probes
-	//TO DO: some distribution maybe. This is scene-specific. Add more probes on the roof and such
+	//hardcoded for the scene
 	reflection_probes.push_back(new sReflectionProbe({ vec3(-80,80,-100), nullptr}));
 	reflection_probes.push_back(new sReflectionProbe({ vec3(-50,80,233), nullptr }));
+	reflection_probes.push_back(new sReflectionProbe({ vec3(350,100,-150), nullptr }));
+	reflection_probes.push_back(new sReflectionProbe({ vec3(339,100,265), nullptr }));
 }
 
 void Renderer::setupScene()
@@ -664,8 +666,49 @@ void Renderer::renderSceneDeferred(SCN::Scene* scene, Camera* camera) {
 	glEnable(GL_DEPTH_TEST);
 	glDepthFunc(GL_ALWAYS);
 	baseRenderMP(quad, deferred_global); //this forces the deferred depthmap into the linear fbo
+	deferred_global->disable();
+
+
+	//render reflections TODO entre base render y light pass???
+	glDisable(GL_DEPTH_TEST);
+	glEnable(GL_BLEND);
+	glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+	glDepthMask(false);
+	GFX::Shader* reflections = GFX::Shader::Get("reflection");
+	reflections->enable();
+	cameraToShader(camera, reflections);
+	reflections->setUniform("u_invRes", vec2(1.0 / size.x, 1.0 / size.y));
+	reflections->setUniform("u_inverse_viewprojection", camera->inverse_viewprojection_matrix);
+	reflections->setUniform("u_render", gBuffersFBO->color_textures[0], 0);
+	reflections->setUniform("u_normals_gbuffer", gBuffersFBO->color_textures[1], 1);
+	reflections->setUniform("u_mat_properties_gbuffer", gBuffersFBO->color_textures[2], 2);
+	reflections->setUniform("u_depth_texture", gBuffersFBO->depth_texture, 3);
+
+	//pass probe data to gpu
+	Vector3f probe_positions[NUM_REFL_PROBES];
+	for (int i = 0; i < reflection_probes.size(); i++) {
+		sReflectionProbe* current_probe = reflection_probes.at(i);
+		probe_positions[i] = current_probe->pos;
+		GFX::Texture* reflection_texture = current_probe == nullptr ? skybox_cubemap : current_probe->cubemap;
+
+		char buffer[50];  // Temporary buffer to hold the concatenated string
+		std::snprintf(buffer, sizeof(buffer), "u_reflection_%d", i); // Safely format the string
+		// Allocate memory for the char* name
+		char* name = new char[std::strlen(buffer) + 1];
+		// Copy the formatted string into name
+		std::strcpy(name, buffer);
+
+		reflections->setUniform(name, reflection_texture, 4 + i);
+	}
+	reflections->setUniform3Array("u_probe_pos", (float*)&probe_positions, NUM_REFL_PROBES);
+
+	quad->render(GL_TRIANGLES);
+	reflections->disable();
+	glDepthMask(true);
+
 
 	//variables and flags for illumination pass
+	deferred_global->enable();
 	GFX::Mesh light_sphere;
 	Vector3f light_pos;
 	Matrix44 sphere_model;
@@ -674,6 +717,7 @@ void Renderer::renderSceneDeferred(SCN::Scene* scene, Camera* camera) {
 	glEnable(GL_BLEND);
 	glEnable(GL_CULL_FACE);
 	glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+
 
 	//illumination pass
 	for (int i = 0; i < lights.size(); i++) {
@@ -713,7 +757,8 @@ void Renderer::renderSceneDeferred(SCN::Scene* scene, Camera* camera) {
 	}
 	deferred_global->disable();
 
-	//render probes (important to do before rendering alpha nodes)
+
+	//render probes if necessary (important to do before rendering alpha nodes)
 	glEnable(GL_DEPTH_TEST);
 	glDepthFunc(GL_LESS);
 	glDisable(GL_BLEND);
@@ -900,6 +945,7 @@ void Renderer::renderProbeFaces(SCN::Scene*, Camera* camera, bool render_skybox)
 
 	// Clear the color and the depth buffer
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+	glDisable(GL_CULL_FACE);
 	GFX::checkGLErrors();
 
 	if (render_skybox) {
@@ -1481,7 +1527,7 @@ void SCN::Renderer::renderReflectionProbe(sReflectionProbe& s, float scale) {
 void SCN::Renderer::captureReflectionProbe(sReflectionProbe& s) {
 	if (!s.cubemap) {
 		s.cubemap = new GFX::Texture();
-		s.cubemap->createCubemap(128,128, nullptr, GL_RGB, GL_FLOAT, true);
+		s.cubemap->createCubemap(356,356, nullptr, GL_RGB, GL_FLOAT, true);
 	}
 
 	//render the view from every side
@@ -1499,7 +1545,7 @@ void SCN::Renderer::captureReflectionProbe(sReflectionProbe& s) {
 		vec3 up = cubemapFaceNormals[i][1];
 		probeCam->lookAt(eye, center, up);
 		probeCam->enable();
-		renderProbeFaces(scene, probeCam, true); //TODO bindea otro fbo, nueva funcion
+		renderProbeFaces(scene, probeCam, false); //TODO bindea otro fbo, nueva funcion
 		multi_probes_fbo->unbind();
 	}
 	//generate the mipmaps
