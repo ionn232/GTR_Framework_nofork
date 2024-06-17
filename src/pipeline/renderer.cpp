@@ -191,17 +191,25 @@ void Renderer::generateShadowmaps(Camera* main_camera) {
 	int shadowmap_size = gui_shadowmap_res;
 	int atlas_dimensions = getSMapdDimensions(numShadowmaps);
 	int shadowatlas_size = atlas_dimensions * shadowmap_size;
-	if (shadowmapAtlas == nullptr || prevAtlasSize != shadowatlas_size) {
+	if ((shadowmapAtlas == nullptr || prevAtlasSize != shadowatlas_size) && shadowatlas_size > 0) {
 		delete shadowmapAtlas;
 		shadowmapAtlas = new GFX::FBO();
 		shadowmapAtlas->setDepthOnly(shadowatlas_size, shadowatlas_size);
 		shadowmapAtlas->depth_texture->setName("SHADOWMAP ATLAS");
 	}
+
 	shadowmapAtlas->bind();
 	Camera camera;
 	int light_index_i = 0;
 	int light_index_j = 0;
 	glClear(GL_DEPTH_BUFFER_BIT);
+	if (numShadowmaps == 0) {
+		GFX::Texture* texture = GFX::Texture::getWhiteTexture();
+		texture->toViewport();
+		shadowmapAtlas->unbind();
+		prevAtlasSize = shadowatlas_size;
+		return;
+	}
 	for (LightEntity* currentLight : lights) {
 		if (currentLight->cast_shadows) {
 			glViewport((light_index_i * shadowmap_size), (light_index_j * shadowmap_size), shadowmap_size, shadowmap_size);
@@ -385,6 +393,7 @@ void Renderer::renderScene(SCN::Scene* scene, Camera* camera) {
 					bloom_samples.push_back(bloom_layer);
 				}
 			}
+
 			//isolate bright pixels
 			GFX::Shader* bloom_shader = GFX::Shader::Get("bloom_pass");
 			bloom_shader->enable();
@@ -398,7 +407,7 @@ void Renderer::renderScene(SCN::Scene* scene, Camera* camera) {
 			bloom_shader->disable();
 			fx_fbo->unbind();
 
-			//downsample
+			//downsample iteratively
 			GFX::Shader* blur_shader = circular_blur ? GFX::Shader::Get("blur_circular") : GFX::Shader::Get("blur_neighbors");
 			blur_shader->enable();
 			for (int i = 0; i < bloom_iterations; i++) {
@@ -450,7 +459,7 @@ void Renderer::renderScene(SCN::Scene* scene, Camera* camera) {
 			linear_fbo->unbind();
 		}
 
-		//FX3: motion_blur
+		//FX3: motion blur
 		if (use_motion_blur) {
 			glDisable(GL_DEPTH_TEST);
 			glDisable(GL_BLEND);
@@ -1003,7 +1012,7 @@ void Renderer::renderSceneDeferred(SCN::Scene* scene, Camera* camera) {
 	partial_render = false;
 }
 
-void Renderer::renderSkybox(GFX::Texture* cubemap)
+void Renderer::renderSkybox(GFX::Texture* cubemap, float intensity)
 {
 	Camera* camera = Camera::current;
 
@@ -1024,6 +1033,7 @@ void Renderer::renderSkybox(GFX::Texture* cubemap)
 	shader->setUniform("u_model", m);
 	cameraToShader(camera, shader);
 	shader->setUniform("u_texture", cubemap, 0);
+	shader->setUniform("u_intensity", intensity);
 	sphere.render(GL_TRIANGLES);
 	shader->disable();
 	glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
@@ -1044,7 +1054,7 @@ void Renderer::renderProbeFaces(SCN::Scene*, Camera* camera, bool render_skybox)
 
 	if (render_skybox) {
 		if (skybox_cubemap)
-			renderSkybox(skybox_cubemap);
+			renderSkybox(skybox_cubemap, 0.001f); //this is before color banding so value is really small to counter the colors (hardcoded to current scene TODO adjust)
 	}
 
 	//render entities
@@ -1639,7 +1649,7 @@ void SCN::Renderer::captureReflectionProbe(sReflectionProbe& s) {
 		vec3 up = cubemapFaceNormals[i][1];
 		probeCam->lookAt(eye, center, up);
 		probeCam->enable();
-		renderProbeFaces(scene, probeCam, false);
+		renderProbeFaces(scene, probeCam, true);
 		multi_probes_fbo->unbind();
 	}
 	//generate the mipmaps

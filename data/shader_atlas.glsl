@@ -1300,7 +1300,7 @@ void main() {
 	vec2 blur_distance = u_blur_distance;
     float radius = max(blur_dimensions.x, blur_dimensions.y) / 2.0;  // Radius for circular sampling
 
-    vec3 occlusion_factor = vec3(0.0);
+    vec3 sum = vec3(0.0);
     float valid_pixels = 0.0;
 
 	float alpha = texture(u_raw, uv).a;
@@ -1331,7 +1331,7 @@ void main() {
 					continue;
 				}
                 else if (current_uv.x > 0.0 && current_uv.x < 1.0 && current_uv.y > 0.0 && current_uv.y < 1.0) {
-                    occlusion_factor += max(texture(u_raw, current_uv).xyz, vec3(0.0));
+                    sum += max(texture(u_raw, current_uv).xyz, vec3(0.0));
                     valid_pixels += 1.0;
                 }
             }
@@ -1339,10 +1339,10 @@ void main() {
     }
 
     if (valid_pixels > 0.0) {
-        occlusion_factor /= valid_pixels;
+        sum /= valid_pixels;
     }
 
-    FragColor = vec4(occlusion_factor, alpha);
+    FragColor = vec4(sum, alpha);
 }
 
 
@@ -1356,13 +1356,14 @@ in vec3 v_world_position;
 
 uniform samplerCube u_texture;
 uniform vec3 u_camera_position;
+uniform float u_intensity;
 out vec4 FragColor;
 
 void main()
 {
 	vec3 E = v_world_position - u_camera_position;
 	vec4 color = texture( u_texture, E );
-	color.xyz = pow(color.xyz, vec3(2.2));
+	color.xyz = pow(color.xyz, vec3(2.2)) * vec3(u_intensity);
 	FragColor = color;
 
 
@@ -1757,7 +1758,6 @@ in vec4 v_color;
 uniform vec3 u_camera_position;
 uniform samplerCube u_environment_texture;
 uniform int u_linearize_colors;
-uniform sampler2D depth_map;
 
 out vec4 FragColor;
 
@@ -1814,8 +1814,7 @@ void main() {
 	float metalness = texture( u_mat_properties_gbuffer, uv).g;
 	float shininess =  texture( u_mat_properties_gbuffer, uv).b;
 
-	//if (depth == 1.0) { discard; }
-	//if (depth > gl_FragDepth) { discard; }
+	if (depth == 1.0) { discard; }
 
 	//reconstruct world position from depth and inv. viewproj
 	vec4 screen_pos = vec4(uv.x*2.0-1.0, uv.y*2.0-1.0, depth*2.0-1.0, 1.0);
@@ -1857,7 +1856,7 @@ void main() {
 	//compute the reflection
 	vec3 reflection = color * reflection_color;
 
-	FragColor = vec4(pow(reflection, vec3(1/2.2)), metalness);
+	FragColor = vec4(pow(reflection, vec3(1/2.2)), metalness * 0.7);
 }
 
 
@@ -2128,8 +2127,11 @@ void main() {
 	vec4 color = texture2D( u_render , v_uv );
 	vec2 uv = gl_FragCoord.xy * u_invRes.xy;
 
-	float intensity = max(color.r, color.g); //IDEA: mirar máximo en vez de average
+	//check max color instead of average to avoid under-blooming certain elements like the sign
+	float intensity = max(color.r, color.g);
 	intensity = max(intensity, color.b);
+
+
 	if (intensity <= u_threshold) {
 		discard;
 	}

@@ -181,7 +181,7 @@ namespace SCN {
 		void renderSceneDeferred(SCN::Scene* scene, Camera* camera);
 
 		//render the skybox
-		void renderSkybox(GFX::Texture* cubemap);
+		void renderSkybox(GFX::Texture* cubemap, float intensity = 1.0f);
 
 		//forward scene render adapted for irradiance probes (no shadowmaps, renders to whatever context is active previous to all)
 		void renderProbeFaces(SCN::Scene*, Camera* camera, bool render_skybox);
