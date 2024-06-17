@@ -23,6 +23,7 @@ volumetric quad.vs volumetric.fs
 motion_blur quad.vs motion_blur.fs
 bloom_pass quad.vs bloom_pass.fs
 color_banding quad.vs color_banding.fs
+depth_of_field quad.vs depth_of_field.fs
 
 \basic.vs
 
@@ -2025,7 +2026,7 @@ void main() {
 					+ abs(current_pos.z * 0.0001) * (1.0-dist/1000.0)
 					);
 
-				if (u_light_type[i] == 1 && !shadow_pixel) { 		//point lights
+				if (u_light_type[i] == 1) { 		//point lights
 					//diffuse value
 					vec3 L = u_light_pos[i] - current_pos;
 					L= normalize(L);
@@ -2065,7 +2066,7 @@ void main() {
 					}
 
 					light += (light_color * 5.0) * shadow_factor * particle_density * translucency * (air_density * step_dist) * NdotL * att_factor;
-					
+
 				}
 				else if (u_light_type[i] == 3) {		//directional lights (no shadow pixel computation because it looks like	SHIT)
 					//diffuse value
@@ -2161,4 +2162,48 @@ void main() {
 	final_color.xyz = min(color.xyz, 1.0);
 
 	FragColor = vec4(final_color.xyz, final_color.a);
+}
+
+\depth_of_field.fs
+
+#version 330 core
+
+const float Pi = 3.141592654;
+
+in vec2 v_uv;
+
+uniform sampler2D u_render;
+uniform sampler2D u_blurred_render;
+uniform sampler2D u_depth_texture;
+uniform float u_min_dist;
+uniform float u_max_dist;
+uniform vec2 u_invRes;
+uniform mat4 u_inverse_viewprojection;
+uniform vec3 u_camera_position;
+
+
+out vec4 FragColor;
+
+void main() {
+	//IDEA: send camera pos, get worldpos, use distance to camera instead of log depth
+	vec2 uv = gl_FragCoord.xy * u_invRes.xy;
+	float depth = texture(u_depth_texture, uv).x;
+
+	//reconstruct world position from depth and inv. viewproj
+	vec4 screen_pos = vec4(uv.x*2.0-1.0, uv.y*2.0-1.0, depth*2.0-1.0, 1.0);
+	vec4 proj_worldpos = u_inverse_viewprojection * screen_pos;
+	vec3 worldpos = proj_worldpos.xyz / proj_worldpos.w;
+
+	vec4 focusColor = texture2D( u_render , uv );
+	vec4 blurColor = texture2D( u_blurred_render , uv );
+	float blur;
+
+	vec3 position = worldpos;
+	vec3 focusPoint = u_camera_position;
+
+	float distance = length(focusPoint - position);
+
+	blur = smoothstep(u_min_dist, u_max_dist, distance);
+
+	FragColor = focusColor * (1.0-blur) + blurColor * blur;
 }

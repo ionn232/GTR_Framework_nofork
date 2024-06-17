@@ -109,6 +109,9 @@ namespace SCN {
 		float color_banding_factor = 1.005f;
 		float bloom_threshold = 0.3f;
 		int bloom_iterations = 3;
+		bool use_dof = true;
+		float dof_min = 700.0f;
+		float dof_max = 1500.0f;
 
 		//tonemapper parameters
 		float tmp_scale = 1.0f;

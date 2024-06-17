@@ -191,7 +191,7 @@ void Renderer::generateShadowmaps(Camera* main_camera) {
 	int shadowmap_size = gui_shadowmap_res;
 	int atlas_dimensions = getSMapdDimensions(numShadowmaps);
 	int shadowatlas_size = atlas_dimensions * shadowmap_size;
-	if ((shadowmapAtlas == nullptr || prevAtlasSize != shadowatlas_size) && shadowatlas_size > 0) {
+	if ((shadowmapAtlas == nullptr || (prevAtlasSize != shadowatlas_size && prevAtlasSize > 0)) && (shadowatlas_size > 0)) {
 		delete shadowmapAtlas;
 		shadowmapAtlas = new GFX::FBO();
 		shadowmapAtlas->setDepthOnly(shadowatlas_size, shadowatlas_size);
@@ -203,13 +203,15 @@ void Renderer::generateShadowmaps(Camera* main_camera) {
 	int light_index_i = 0;
 	int light_index_j = 0;
 	glClear(GL_DEPTH_BUFFER_BIT);
-	if (numShadowmaps == 0) {
+
+	if (numShadowmaps == 0) { //if shadowmaps dont exist just render a 
 		GFX::Texture* texture = GFX::Texture::getWhiteTexture();
 		texture->toViewport();
 		shadowmapAtlas->unbind();
 		prevAtlasSize = shadowatlas_size;
 		return;
 	}
+
 	for (LightEntity* currentLight : lights) {
 		if (currentLight->cast_shadows) {
 			glViewport((light_index_i * shadowmap_size), (light_index_j * shadowmap_size), shadowmap_size, shadowmap_size);
@@ -333,8 +335,9 @@ void Renderer::renderScene(SCN::Scene* scene, Camera* camera) {
 
 	//skip further computations if an intermediate process has been selected as deferred type (viewport alredy filled)
 	if (!partial_render) {
-
 		//apply PostFX transformations to the render in linear color space
+		//each of these should be a function probably
+
 		if (!fx_fbo || prevScreenSize.distance(size) > 0.0) {
 			delete fx_fbo;
 			fx_fbo = new GFX::FBO();
@@ -365,7 +368,42 @@ void Renderer::renderScene(SCN::Scene* scene, Camera* camera) {
 			linear_fbo->unbind();
 		}
 
-		//FX1: bloom
+		//FX1: DoF
+		if (use_dof) {
+			//get blurred image
+			GFX::Shader* blur_shader = circular_blur ? GFX::Shader::Get("blur_circular") : GFX::Shader::Get("blur_neighbors");
+			blur_shader->enable();
+			fx_fbo->bind();
+			vec2 invRes = vec2(1.0 / linear_fbo->color_textures[0]->width, 1.0 / linear_fbo->color_textures[0]->height);
+			blur_shader->setUniform("u_raw", linear_fbo->color_textures[0], 0);
+			blur_shader->setUniform("u_depth_texture", linear_fbo->depth_texture, 1);
+			blur_shader->setUniform("u_invRes", invRes);
+			blur_shader->setUniform("u_blur_far", true);
+			blur_shader->setUniform("u_blur_dimensions", vec2(8,8));
+			blur_shader->setUniform("u_blur_distance", vec2(2,2));
+			glClear(GL_COLOR_BUFFER_BIT);
+			quad->render(GL_TRIANGLES);
+			fx_fbo->unbind();
+			blur_shader->disable();
+
+			//perform DoF
+			GFX::Shader* dof_shader = GFX::Shader::Get("depth_of_field");
+			dof_shader->enable();
+			linear_fbo->bind();
+			dof_shader->setUniform("u_render", linear_fbo->color_textures[0], 0);
+			dof_shader->setUniform("u_blurred_render", fx_fbo->color_textures[0], 1);
+			dof_shader->setUniform("u_depth_texture", linear_fbo->depth_texture, 2);
+			dof_shader->setUniform("u_min_dist", dof_min);
+			dof_shader->setUniform("u_max_dist", dof_max);
+			dof_shader->setUniform("u_invRes", invRes);
+			dof_shader->setUniform("u_inverse_viewprojection", camera->inverse_viewprojection_matrix);
+			cameraToShader(camera, dof_shader);
+			quad->render(GL_TRIANGLES);
+			linear_fbo->unbind();
+			dof_shader->disable();
+		}
+
+		//FX2: bloom
 		//this can easily be made with less FBOs
 		//and better performance
 		//but I have an exam tomorrow
@@ -436,7 +474,7 @@ void Renderer::renderScene(SCN::Scene* scene, Camera* camera) {
 			glDisable(GL_BLEND);
 		}
 
-		//FX2: blur
+		//FX3: image blur
 		if (blur_render) {
 			GFX::Shader* blur_shader = circular_blur ? GFX::Shader::Get("blur_circular") : GFX::Shader::Get("blur_neighbors");
 			blur_shader->enable();
@@ -459,7 +497,7 @@ void Renderer::renderScene(SCN::Scene* scene, Camera* camera) {
 			linear_fbo->unbind();
 		}
 
-		//FX3: motion blur
+		//FX4: motion blur
 		if (use_motion_blur) {
 			glDisable(GL_DEPTH_TEST);
 			glDisable(GL_BLEND);
@@ -489,7 +527,7 @@ void Renderer::renderScene(SCN::Scene* scene, Camera* camera) {
 			prev_motionblur->unbind();
 		}
 
-		//FX?4: tonemapper / gamma
+		//FX?5: tonemapper / gamma
 		if (gui_use_tonemapper) {
 			GFX::Shader* tonemapper_shader = GFX::Shader::Get("tonemapper");
 			tonemapper_shader->enable();
@@ -1753,6 +1791,9 @@ void Renderer::showUI()
 		}
 	}
 	ImGui::Checkbox("Color banding", &color_banding);
+	ImGui::Checkbox("Depth of Field", &use_dof);
+	ImGui::DragFloat("DoF - min distance", &dof_min, 1.0f, 0.0f, dof_max-1.0);
+	ImGui::DragFloat("DoF - max distance", &dof_max, 1.0f, dof_min, 5000.00f);
 	ImGui::Checkbox("Blur render", &blur_render);
 	ImGui::DragFloat("Blur (X)", &fx_blur_res.x, 1.00f, 1.0f, 100.0f);
 	ImGui::DragFloat("Blur (Y)", &fx_blur_res.y, 1.00f, 1.0f, 100.0f);
