@@ -347,6 +347,7 @@ void Renderer::renderScene(SCN::Scene* scene, Camera* camera) {
 
 		glDisable(GL_DEPTH_TEST);
 		glDisable(GL_BLEND);
+		vec2 invRes = vec2(1.0 / linear_fbo->color_textures[0]->width, 1.0 / linear_fbo->color_textures[0]->height);
 
 		//FX0: color banding
 		if (color_banding) {
@@ -374,7 +375,6 @@ void Renderer::renderScene(SCN::Scene* scene, Camera* camera) {
 			GFX::Shader* blur_shader = circular_blur ? GFX::Shader::Get("blur_circular") : GFX::Shader::Get("blur_neighbors");
 			blur_shader->enable();
 			fx_fbo->bind();
-			vec2 invRes = vec2(1.0 / linear_fbo->color_textures[0]->width, 1.0 / linear_fbo->color_textures[0]->height);
 			blur_shader->setUniform("u_raw", linear_fbo->color_textures[0], 0);
 			blur_shader->setUniform("u_depth_texture", linear_fbo->depth_texture, 1);
 			blur_shader->setUniform("u_invRes", invRes);
@@ -436,7 +436,6 @@ void Renderer::renderScene(SCN::Scene* scene, Camera* camera) {
 			GFX::Shader* bloom_shader = GFX::Shader::Get("bloom_pass");
 			bloom_shader->enable();
 			fx_fbo->bind();
-			vec2 invRes = vec2(1.0 / linear_fbo->color_textures[0]->width, 1.0 / linear_fbo->color_textures[0]->height);
 			bloom_shader->setUniform("u_render", linear_fbo->color_textures[0], 0);
 			bloom_shader->setUniform("u_threshold", bloom_threshold);
 			bloom_shader->setUniform("u_invRes", invRes);
@@ -450,7 +449,6 @@ void Renderer::renderScene(SCN::Scene* scene, Camera* camera) {
 			blur_shader->enable();
 			for (int i = 0; i < bloom_iterations; i++) {
 				bloom_samples.at(i)->bind();
-				invRes = vec2(1.0 / size.x, 1.0 / size.y);
 				blur_shader->setUniform("u_raw", i==0 ? fx_fbo->color_textures[0] : bloom_samples.at(i-1)->color_textures[0], 0);
 				blur_shader->setUniform("u_invRes", invRes);
 				blur_shader->setUniform("u_blur_far", true);
@@ -474,12 +472,51 @@ void Renderer::renderScene(SCN::Scene* scene, Camera* camera) {
 			glDisable(GL_BLEND);
 		}
 
-		//FX3: image blur
+		//FX3: chromatic aberration
+		if (use_chromatic_aberration) {
+			GFX::Shader* CA_shader = GFX::Shader::Get("chromatic_aberration");
+			CA_shader->enable();
+			fx_fbo->bind();
+			CA_shader->setUniform("u_render", linear_fbo->color_textures[0], 0);
+			CA_shader->setUniform("u_intensity", chromatic_aberration_factor);
+			CA_shader->setUniform("u_invRes", invRes);
+			glClear(GL_COLOR_BUFFER_BIT);
+			quad->render(GL_TRIANGLES);
+			CA_shader->disable();
+			fx_fbo->unbind();
+
+			linear_fbo->bind();
+			glClear(GL_COLOR_BUFFER_BIT);
+			fx_fbo->color_textures[0]->toViewport();
+			linear_fbo->unbind();
+		}
+
+
+		//FX4: lens distortion
+		if (use_lens_distortion) {
+			GFX::Shader* LD_shader = GFX::Shader::Get("lens_distortion");
+			LD_shader->enable();
+			fx_fbo->bind();
+			LD_shader->setUniform("u_render", linear_fbo->color_textures[0], 0);
+			LD_shader->setUniform("u_intensity", lens_distortion_intensity);
+			LD_shader->setUniform("u_dist_mode", lens_distortion_mode);
+			LD_shader->setUniform("u_invRes", invRes);
+			glClear(GL_COLOR_BUFFER_BIT);
+			quad->render(GL_TRIANGLES);
+			LD_shader->disable();
+			fx_fbo->unbind();
+
+			linear_fbo->bind();
+			glClear(GL_COLOR_BUFFER_BIT);
+			fx_fbo->color_textures[0]->toViewport();
+			linear_fbo->unbind();
+		}
+
+		//FX5: image blur
 		if (blur_render) {
 			GFX::Shader* blur_shader = circular_blur ? GFX::Shader::Get("blur_circular") : GFX::Shader::Get("blur_neighbors");
 			blur_shader->enable();
 			fx_fbo->bind();
-			vec2 invRes = vec2(1.0 / linear_fbo->color_textures[0]->width, 1.0 / linear_fbo->color_textures[0]->height);
 			blur_shader->setUniform("u_raw", linear_fbo->color_textures[0], 0);
 			blur_shader->setUniform("u_depth_texture", linear_fbo->depth_texture, 1);
 			blur_shader->setUniform("u_invRes", invRes);
@@ -497,7 +534,7 @@ void Renderer::renderScene(SCN::Scene* scene, Camera* camera) {
 			linear_fbo->unbind();
 		}
 
-		//FX4: motion blur
+		//FX6: motion blur
 		if (use_motion_blur) {
 			glDisable(GL_DEPTH_TEST);
 			glDisable(GL_BLEND);
@@ -516,6 +553,7 @@ void Renderer::renderScene(SCN::Scene* scene, Camera* camera) {
 			motion_blur->setUniform("u_render", linear_fbo->color_textures[0], 0);
 			motion_blur->setUniform("u_last_results", prev_motionblur->color_textures[0], 1);
 			motion_blur->setUniform("u_intensity", motion_blur_intensity);
+			motion_blur->setUniform("u_burn_in", frame_smoothing_burnin);
 			quad->render(GL_TRIANGLES);
 			motion_blur->disable();
 			linear_fbo->unbind();
@@ -527,7 +565,7 @@ void Renderer::renderScene(SCN::Scene* scene, Camera* camera) {
 			prev_motionblur->unbind();
 		}
 
-		//FX?5: tonemapper / gamma
+		//FX?7: tonemapper / gamma
 		if (gui_use_tonemapper) {
 			GFX::Shader* tonemapper_shader = GFX::Shader::Get("tonemapper");
 			tonemapper_shader->enable();
@@ -809,42 +847,44 @@ void Renderer::renderSceneDeferred(SCN::Scene* scene, Camera* camera) {
 	deferred_global->disable();
 
 
-	//render reflections
-	glDisable(GL_DEPTH_TEST);
-	glEnable(GL_BLEND);
-	glBlendFunc(GL_SRC_ALPHA, GL_ONE);
-	glDepthMask(false);
-	GFX::Shader* reflections = GFX::Shader::Get("reflection");
-	reflections->enable();
-	cameraToShader(camera, reflections);
-	reflections->setUniform("u_invRes", vec2(1.0 / size.x, 1.0 / size.y));
-	reflections->setUniform("u_inverse_viewprojection", camera->inverse_viewprojection_matrix);
-	reflections->setUniform("u_render", gBuffersFBO->color_textures[0], 0);
-	reflections->setUniform("u_normals_gbuffer", gBuffersFBO->color_textures[1], 1);
-	reflections->setUniform("u_mat_properties_gbuffer", gBuffersFBO->color_textures[2], 2);
-	reflections->setUniform("u_depth_texture", gBuffersFBO->depth_texture, 3);
+	//render reflections if necessary
+	if (render_reflections) {
+		glDisable(GL_DEPTH_TEST);
+		glEnable(GL_BLEND);
+		glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+		glDepthMask(false);
+		GFX::Shader* reflections = GFX::Shader::Get("reflection");
+		reflections->enable();
+		cameraToShader(camera, reflections);
+		reflections->setUniform("u_invRes", vec2(1.0 / size.x, 1.0 / size.y));
+		reflections->setUniform("u_inverse_viewprojection", camera->inverse_viewprojection_matrix);
+		reflections->setUniform("u_render", gBuffersFBO->color_textures[0], 0);
+		reflections->setUniform("u_normals_gbuffer", gBuffersFBO->color_textures[1], 1);
+		reflections->setUniform("u_mat_properties_gbuffer", gBuffersFBO->color_textures[2], 2);
+		reflections->setUniform("u_depth_texture", gBuffersFBO->depth_texture, 3);
 
-	//pass probe data to gpu
-	Vector3f probe_positions[NUM_REFL_PROBES];
-	for (int i = 0; i < reflection_probes.size(); i++) {
-		sReflectionProbe* current_probe = reflection_probes.at(i);
-		probe_positions[i] = current_probe->pos;
-		GFX::Texture* reflection_texture = current_probe == nullptr ? skybox_cubemap : current_probe->cubemap;
+		//pass probe data to gpu
+		Vector3f probe_positions[NUM_REFL_PROBES];
+		for (int i = 0; i < reflection_probes.size(); i++) {
+			sReflectionProbe* current_probe = reflection_probes.at(i);
+			probe_positions[i] = current_probe->pos;
+			GFX::Texture* reflection_texture = current_probe == nullptr ? skybox_cubemap : current_probe->cubemap;
 
-		char buffer[50];  // Temporary buffer to hold the concatenated string
-		std::snprintf(buffer, sizeof(buffer), "u_reflection_%d", i); // Safely format the string
-		// Allocate memory for the char* name
-		char* name = new char[std::strlen(buffer) + 1];
-		// Copy the formatted string into name
-		std::strcpy(name, buffer);
+			char buffer[50];  // Temporary buffer to hold the concatenated string
+			std::snprintf(buffer, sizeof(buffer), "u_reflection_%d", i); // Safely format the string
+			// Allocate memory for the char* name
+			char* name = new char[std::strlen(buffer) + 1];
+			// Copy the formatted string into name
+			std::strcpy(name, buffer);
 
-		reflections->setUniform(name, reflection_texture, 4 + i);
+			reflections->setUniform(name, reflection_texture, 4 + i);
+		}
+		reflections->setUniform3Array("u_probe_pos", (float*)&probe_positions, NUM_REFL_PROBES);
+
+		quad->render(GL_TRIANGLES);
+		reflections->disable();
+		glDepthMask(true);
 	}
-	reflections->setUniform3Array("u_probe_pos", (float*)&probe_positions, NUM_REFL_PROBES);
-
-	quad->render(GL_TRIANGLES);
-	reflections->disable();
-	glDepthMask(true);
 
 
 	//variables and flags for illumination pass
@@ -1768,13 +1808,8 @@ void Renderer::showUI()
 			ImGui::EndCombo();
 		}
 		if (ImGui::BeginCombo("Reflections", "Show options")) {
+			ImGui::Checkbox("Render reflections", &render_reflections);
 			ImGui::Checkbox("Show reflection probes", &show_ref_probes);
-			if (ImGui::Button("Capture Reflections")) {
-				//TODO do a function
-				for (int i = 0; i < reflection_probes.size(); i++) {
-					captureReflectionProbe(*reflection_probes.at(i));
-				}
-			}
 			ImGui::EndCombo();
 		}
 		ImGui::Checkbox("Volumetric lights", &volumetric_light);
@@ -1791,6 +1826,8 @@ void Renderer::showUI()
 		}
 	}
 	ImGui::Checkbox("Color banding", &color_banding);
+	ImGui::Checkbox("Chromatic aberration", &use_chromatic_aberration);
+	ImGui::DragFloat("CA intensity", &chromatic_aberration_factor, 0.01f, 0.0f, 1.0f);
 	ImGui::Checkbox("Depth of Field", &use_dof);
 	ImGui::DragFloat("DoF - min distance", &dof_min, 1.0f, 0.0f, dof_max-1.0);
 	ImGui::DragFloat("DoF - max distance", &dof_max, 1.0f, dof_min, 5000.00f);
@@ -1799,11 +1836,29 @@ void Renderer::showUI()
 	ImGui::DragFloat("Blur (Y)", &fx_blur_res.y, 1.00f, 1.0f, 100.0f);
 	ImGui::DragFloat("Blur dist (X)", &fx_blur_dist.x, 1.00f, 1.0f, 10.0f);
 	ImGui::DragFloat("Blur dist (Y)", &fx_blur_dist.y, 1.00f, 1.0f, 10.0f);
-	ImGui::Checkbox("Motion blur", &use_motion_blur);
+	ImGui::Checkbox("Frame smoothing", &use_motion_blur);
+	ImGui::Checkbox("Frame smoothing burn-in", &frame_smoothing_burnin);
 	ImGui::DragFloat("Motion Blur Intensity", &motion_blur_intensity, 0.01f, 0.01f, 0.99f);
 	ImGui::Checkbox("Activate bloom", &use_bloom);
 	ImGui::DragFloat("Bloom threshold", &bloom_threshold, 0.01f, 0.01f, 2.0f);
 	ImGui::DragInt("Bloom iterations", &bloom_iterations, 1, 1, 10);
+	ImGui::Checkbox("Lens distortion", &use_lens_distortion);
+	if (ImGui::BeginCombo("select mode", "Lens distortion")) {
+		if (ImGui::Button("Pincushion")) {
+			lens_distortion_mode = 0;
+		}
+		else if (ImGui::Button("Barrel")) {
+			lens_distortion_mode = 1;
+		}
+		else if (ImGui::Button("Fisheye")) {
+			lens_distortion_mode = 2;
+		}
+		else if (ImGui::Button("CRT")) {
+			lens_distortion_mode = 3;
+		}
+		ImGui::EndCombo();
+	}
+	ImGui::DragFloat("LD intensity", &lens_distortion_intensity, 0.01f, 0.0f, 2.0f);
 }
 
 #else

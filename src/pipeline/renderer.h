@@ -94,6 +94,7 @@ namespace SCN {
 		float irr_probe_size = 5.0f;
 		float irr_factor = 1.0f;
 		float irr_normal_distance = 7.0f;
+		bool render_reflections = true;
 		bool show_ref_probes = false;
 		bool volumetric_light = true;
 		float air_density = 0.06f;
@@ -101,6 +102,7 @@ namespace SCN {
 		bool blur_render = false;
 		bool circular_blur = true;
 		bool use_motion_blur = true;
+		bool frame_smoothing_burnin = false;
 		float motion_blur_intensity = 0.45f;
 		vec2 fx_blur_res = vec2(5.0, 5.0);
 		vec2 fx_blur_dist = vec2(1.0, 1.0);
@@ -112,6 +114,12 @@ namespace SCN {
 		bool use_dof = true;
 		float dof_min = 700.0f;
 		float dof_max = 1500.0f;
+		bool use_chromatic_aberration = true;
+		float chromatic_aberration_factor = 0.1f;
+		bool use_lens_distortion = true;
+		int lens_distortion_mode = 2;
+		float lens_distortion_intensity = 0.5f;
+
 
 		//tonemapper parameters
 		float tmp_scale = 1.0f;

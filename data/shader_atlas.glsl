@@ -1,29 +1,46 @@
-//example of some shaders compiled
+	//stock shaders
+skybox basic.vs skybox.fs
+depth quad.vs depth.fs
+multi basic.vs multi.fs
 flat basic.vs flat.fs
 texture basic.vs texture.fs
+
+	//forward rendering
 lightSP basic.vs lightSP.fs
 lightMP basic.vs lightMP.fs
+
+	//deferred rendering
 gbuffers basic.vs gbuffers.fs
 deferred_global deferred.vs deferred_global.fs
 view_emissive quad.vs emissive.fs
 ssao quad.vs ssao.fs
+
+	//blur methods
 blur_reprojection quad.vs blur_reprojection.fs
 blur_neighbors quad.vs blur_neighbors.fs
 blur_circular quad.vs blur_circular.fs
-skybox basic.vs skybox.fs
-depth quad.vs depth.fs
-multi basic.vs multi.fs
-gamma quad.vs gamma.fs
-tonemapper quad.vs tonemapper.fs
+
+	//irradiance and reflections
 probe basic.vs probe.fs
 irradiance quad.vs irradiance.fs
 reflection_probe basic.vs reflection_probe.fs
 reflection quad.vs reflection.fs
+
+	//volumetric lights
 volumetric quad.vs volumetric.fs
+
+	//color correction
+gamma quad.vs gamma.fs
+tonemapper quad.vs tonemapper.fs
+color_banding quad.vs color_banding.fs
+
+	//fx
 motion_blur quad.vs motion_blur.fs
 bloom_pass quad.vs bloom_pass.fs
-color_banding quad.vs color_banding.fs
 depth_of_field quad.vs depth_of_field.fs
+chromatic_aberration quad.vs chromatic_aberration.fs
+lens_distortion quad.vs lens_distortion.fs
+
 
 \basic.vs
 
@@ -2099,6 +2116,7 @@ in vec2 v_uv;
 uniform sampler2D u_render;
 uniform sampler2D u_last_results;
 uniform float u_intensity;
+uniform bool u_burn_in;
 
 out vec4 FragColor;
 
@@ -2108,6 +2126,7 @@ void main() {
 	vec4 final_color;
 
 	final_color = (1.0 - u_intensity) * color + u_intensity * prev_frame;
+	if (!u_burn_in) {final_color.xyz = min(final_color.xyz, vec3(1.0)); }
 
 	FragColor = vec4(final_color.xyz, 1.0);
 }
@@ -2168,8 +2187,6 @@ void main() {
 
 #version 330 core
 
-const float Pi = 3.141592654;
-
 in vec2 v_uv;
 
 uniform sampler2D u_render;
@@ -2185,7 +2202,6 @@ uniform vec3 u_camera_position;
 out vec4 FragColor;
 
 void main() {
-	//IDEA: send camera pos, get worldpos, use distance to camera instead of log depth
 	vec2 uv = gl_FragCoord.xy * u_invRes.xy;
 	float depth = texture(u_depth_texture, uv).x;
 
@@ -2206,4 +2222,91 @@ void main() {
 	blur = smoothstep(u_min_dist, u_max_dist, distance);
 
 	FragColor = focusColor * (1.0-blur) + blurColor * blur;
+}
+
+\chromatic_aberration.fs
+
+#version 330 core
+
+in vec2 v_uv;
+
+uniform sampler2D u_render;
+uniform float u_intensity;
+uniform vec2 u_invRes;
+
+
+out vec4 FragColor;
+
+void main() {
+	vec2 half = vec2(0.5);
+	vec2 uv = gl_FragCoord.xy * u_invRes.xy;
+
+	vec2 V = (half - uv);
+	float dist = length(V);
+	V = normalize(V);
+
+	//smooth values without making them absolute (smoothstep function does that god knows why)
+	vec2 temp = clamp(vec2(dist) * u_intensity * V, -1.0, 1.0);
+	vec2 uv_off = (temp) * (temp) * (3.0-2.0*temp);
+
+	//little hack to make the effect mirror consistently
+	if (V.x < 0.0) uv_off.x = -uv_off.x;
+	if (V.y < 0.0) uv_off.y = -uv_off.y;
+
+	float color_r = texture2D( u_render , uv).r;
+	float color_g = texture2D( u_render, uv - uv_off).g;
+	float color_b = texture2D( u_render, uv + uv_off).b;
+
+	FragColor = vec4(color_r, color_g, color_b, 1.0);
+}
+
+\lens_distortion.fs
+
+#version 330 core
+
+in vec2 v_uv;
+
+uniform sampler2D u_render;
+uniform float u_intensity;
+uniform int u_dist_mode;
+uniform vec2 u_invRes;
+
+
+out vec4 FragColor;
+
+void main() {
+	vec2 half = vec2(0.5);
+	vec2 uv = v_uv;
+
+	vec2 V = (uv - half);
+	float dist = length(V);
+	//here we dont normalize to archieve more realistic lens effect
+
+	float maxdist = 0.7071;
+	if (u_dist_mode == 0 || u_dist_mode == 1) {dist = maxdist - dist; } //for barrel and pincushion we want to accentuate center
+	//for fisheye we want to accentuate edges
+
+	float intensity = u_intensity;
+
+	//smooth values without making them absolute (smoothstep function does that god knows why)
+	vec2 temp = clamp(dist * intensity * V, -1.0, 1.0);
+	vec2 uv_off = (temp) * (temp) * (3.0-2.0*temp);
+
+	//little hack to make the effect mirror consistently
+	if (V.x < 0.0) uv_off.x = -uv_off.x;
+	if (V.y < 0.0) uv_off.y = -uv_off.y;
+
+	//default: pincushion CRT distortion sample inwards
+	if (u_dist_mode == 1 || u_dist_mode == 2) uv_off = -uv_off; //barrel and fisheye distortion sample outwards
+
+	//cull out-of-range UVs for pincushion and CRT distortions
+	vec2 final_uv = uv + uv_off;
+	if( final_uv.x < 0.0 || final_uv.x > 1.0 || final_uv.y < 0.0 || final_uv.y > 1.0 ) {
+		discard;
+	}
+
+	vec3 final_color = texture2D( u_render, final_uv).xyz;
+
+	FragColor = vec4(final_color, 1.0);
+
 }
