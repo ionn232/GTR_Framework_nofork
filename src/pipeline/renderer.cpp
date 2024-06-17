@@ -472,38 +472,18 @@ void Renderer::renderScene(SCN::Scene* scene, Camera* camera) {
 			glDisable(GL_BLEND);
 		}
 
-		//FX3: chromatic aberration
-		if (use_chromatic_aberration) {
-			GFX::Shader* CA_shader = GFX::Shader::Get("chromatic_aberration");
-			CA_shader->enable();
+		//FX999: grain
+		if (use_grain) {
+			GFX::Shader* grain_shader = GFX::Shader::Get("grain");
+			grain_shader->enable();
 			fx_fbo->bind();
-			CA_shader->setUniform("u_render", linear_fbo->color_textures[0], 0);
-			CA_shader->setUniform("u_intensity", chromatic_aberration_factor);
-			CA_shader->setUniform("u_invRes", invRes);
+			grain_shader->setUniform("u_render", linear_fbo->color_textures[0], 0);
+			grain_shader->setUniform("u_intensity", grain_intensity);
+			grain_shader->setUniform("u_invRes", invRes);
+			grain_shader->setUniform("u_time", (float)getTime() * 0.001f);
 			glClear(GL_COLOR_BUFFER_BIT);
 			quad->render(GL_TRIANGLES);
-			CA_shader->disable();
-			fx_fbo->unbind();
-
-			linear_fbo->bind();
-			glClear(GL_COLOR_BUFFER_BIT);
-			fx_fbo->color_textures[0]->toViewport();
-			linear_fbo->unbind();
-		}
-
-
-		//FX4: lens distortion
-		if (use_lens_distortion) {
-			GFX::Shader* LD_shader = GFX::Shader::Get("lens_distortion");
-			LD_shader->enable();
-			fx_fbo->bind();
-			LD_shader->setUniform("u_render", linear_fbo->color_textures[0], 0);
-			LD_shader->setUniform("u_intensity", lens_distortion_intensity);
-			LD_shader->setUniform("u_dist_mode", lens_distortion_mode);
-			LD_shader->setUniform("u_invRes", invRes);
-			glClear(GL_COLOR_BUFFER_BIT);
-			quad->render(GL_TRIANGLES);
-			LD_shader->disable();
+			grain_shader->disable();
 			fx_fbo->unbind();
 
 			linear_fbo->bind();
@@ -563,6 +543,46 @@ void Renderer::renderScene(SCN::Scene* scene, Camera* camera) {
 			glClear(GL_COLOR_BUFFER_BIT);
 			linear_fbo->color_textures[0]->toViewport();
 			prev_motionblur->unbind();
+		}
+
+		//FX3: chromatic aberration
+		if (use_chromatic_aberration) {
+			GFX::Shader* CA_shader = GFX::Shader::Get("chromatic_aberration");
+			CA_shader->enable();
+			fx_fbo->bind();
+			CA_shader->setUniform("u_render", linear_fbo->color_textures[0], 0);
+			CA_shader->setUniform("u_intensity", chromatic_aberration_factor);
+			CA_shader->setUniform("u_invRes", invRes);
+			glClear(GL_COLOR_BUFFER_BIT);
+			quad->render(GL_TRIANGLES);
+			CA_shader->disable();
+			fx_fbo->unbind();
+
+			linear_fbo->bind();
+			glClear(GL_COLOR_BUFFER_BIT);
+			fx_fbo->color_textures[0]->toViewport();
+			linear_fbo->unbind();
+		}
+
+
+		//FX4: lens distortion
+		if (use_lens_distortion) {
+			GFX::Shader* LD_shader = GFX::Shader::Get("lens_distortion");
+			LD_shader->enable();
+			fx_fbo->bind();
+			LD_shader->setUniform("u_render", linear_fbo->color_textures[0], 0);
+			LD_shader->setUniform("u_intensity", lens_distortion_intensity);
+			LD_shader->setUniform("u_dist_mode", lens_distortion_mode);
+			LD_shader->setUniform("u_invRes", invRes);
+			glClear(GL_COLOR_BUFFER_BIT);
+			quad->render(GL_TRIANGLES);
+			LD_shader->disable();
+			fx_fbo->unbind();
+
+			linear_fbo->bind();
+			glClear(GL_COLOR_BUFFER_BIT);
+			fx_fbo->color_textures[0]->toViewport();
+			linear_fbo->unbind();
 		}
 
 		//FX?7: tonemapper / gamma
@@ -1842,6 +1862,8 @@ void Renderer::showUI()
 	ImGui::Checkbox("Activate bloom", &use_bloom);
 	ImGui::DragFloat("Bloom threshold", &bloom_threshold, 0.01f, 0.01f, 2.0f);
 	ImGui::DragInt("Bloom iterations", &bloom_iterations, 1, 1, 10);
+	ImGui::Checkbox("Grain filter", &use_grain);
+	ImGui::DragFloat("Grain intensity", &grain_intensity, 0.01f, 0.00f, 1.0f);
 	ImGui::Checkbox("Lens distortion", &use_lens_distortion);
 	if (ImGui::BeginCombo("select mode", "Lens distortion")) {
 		if (ImGui::Button("Pincushion")) {

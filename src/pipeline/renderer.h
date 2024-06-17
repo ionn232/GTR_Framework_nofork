@@ -119,6 +119,8 @@ namespace SCN {
 		bool use_lens_distortion = true;
 		int lens_distortion_mode = 2;
 		float lens_distortion_intensity = 0.5f;
+		bool use_grain = false;
+		float grain_intensity = 0.03f;
 
 
 		//tonemapper parameters
