@@ -94,7 +94,7 @@ namespace SCN {
 		float irr_probe_size = 5.0f;
 		float irr_factor = 1.0f;
 		float irr_normal_distance = 7.0f;
-		bool render_reflections = false;
+		bool render_reflections = true;
 		bool show_ref_probes = false;
 		bool volumetric_light = true;
 		float air_density = 0.06f;
@@ -109,7 +109,7 @@ namespace SCN {
 		bool use_bloom = true;
 		bool color_banding = true;
 		float color_banding_factor = 1.005f;
-		float bloom_threshold = 0.3f;
+		float bloom_threshold = 0.45f;
 		int bloom_iterations = 3;
 		bool use_dof = true;
 		float dof_min = 700.0f;
