@@ -73,7 +73,7 @@ Renderer::Renderer(const char* shader_atlas_filename)
 		//define bounding of the grid and num probes
 		probes_info.start.set(-400, 0, -500);
 		probes_info.end.set(600, 300, 500);
-		probes_info.dim.set(20, 15, 20); //TODO: ajustar en UI
+		probes_info.dim.set(25, 20, 25); //TODO: ajustar en UI
 
 		//compute the vector from one corner to the other
 		vec3 delta = (probes_info.end - probes_info.start);
@@ -347,6 +347,7 @@ void Renderer::renderScene(SCN::Scene* scene, Camera* camera) {
 
 		glDisable(GL_DEPTH_TEST);
 		glDisable(GL_BLEND);
+		glClearColor(0.0, 0.0, 0.0, 1.0);
 		vec2 invRes = vec2(1.0 / linear_fbo->color_textures[0]->width, 1.0 / linear_fbo->color_textures[0]->height);
 
 		//FX0: color banding
@@ -472,15 +473,16 @@ void Renderer::renderScene(SCN::Scene* scene, Camera* camera) {
 			glDisable(GL_BLEND);
 		}
 
-		//FX999: grain
+		//FX3: grain
 		if (use_grain) {
 			GFX::Shader* grain_shader = GFX::Shader::Get("grain");
 			grain_shader->enable();
 			fx_fbo->bind();
 			grain_shader->setUniform("u_render", linear_fbo->color_textures[0], 0);
 			grain_shader->setUniform("u_intensity", grain_intensity);
+			grain_shader->setUniform("u_grain_size", 10.0f - grain_size); //10 is the max size, this should not be hardcoded
 			grain_shader->setUniform("u_invRes", invRes);
-			grain_shader->setUniform("u_time", (float)getTime() * 0.001f);
+			grain_shader->setUniform("u_rand_seed", vec3(std::rand(),std::rand(),std::rand()));
 			glClear(GL_COLOR_BUFFER_BIT);
 			quad->render(GL_TRIANGLES);
 			grain_shader->disable();
@@ -492,7 +494,7 @@ void Renderer::renderScene(SCN::Scene* scene, Camera* camera) {
 			linear_fbo->unbind();
 		}
 
-		//FX5: image blur
+		//FX4: image blur
 		if (blur_render) {
 			GFX::Shader* blur_shader = circular_blur ? GFX::Shader::Get("blur_circular") : GFX::Shader::Get("blur_neighbors");
 			blur_shader->enable();
@@ -514,7 +516,7 @@ void Renderer::renderScene(SCN::Scene* scene, Camera* camera) {
 			linear_fbo->unbind();
 		}
 
-		//FX6: motion blur
+		//FX5: motion blur
 		if (use_motion_blur) {
 			glDisable(GL_DEPTH_TEST);
 			glDisable(GL_BLEND);
@@ -545,7 +547,7 @@ void Renderer::renderScene(SCN::Scene* scene, Camera* camera) {
 			prev_motionblur->unbind();
 		}
 
-		//FX3: chromatic aberration
+		//FX6: chromatic aberration
 		if (use_chromatic_aberration) {
 			GFX::Shader* CA_shader = GFX::Shader::Get("chromatic_aberration");
 			CA_shader->enable();
@@ -565,7 +567,7 @@ void Renderer::renderScene(SCN::Scene* scene, Camera* camera) {
 		}
 
 
-		//FX4: lens distortion
+		//FX7: lens distortion
 		if (use_lens_distortion) {
 			GFX::Shader* LD_shader = GFX::Shader::Get("lens_distortion");
 			LD_shader->enable();
@@ -585,7 +587,7 @@ void Renderer::renderScene(SCN::Scene* scene, Camera* camera) {
 			linear_fbo->unbind();
 		}
 
-		//FX?7: tonemapper / gamma
+		//FX8: tonemapper / gamma
 		if (gui_use_tonemapper) {
 			GFX::Shader* tonemapper_shader = GFX::Shader::Get("tonemapper");
 			tonemapper_shader->enable();
@@ -1104,9 +1106,9 @@ void Renderer::renderSceneDeferred(SCN::Scene* scene, Camera* camera) {
 		blur_volumetric ? fx_fbo->color_textures[0]->toViewport() : volumFBO->color_textures[0]->toViewport();
 		glDepthMask(true);
 		glDisable(GL_BLEND);
+		linear_fbo->unbind();
 	}
 
-	linear_fbo->unbind();
 	partial_render = false;
 }
 
@@ -1680,9 +1682,12 @@ void SCN::Renderer::renderIrradianceTexture() {
 
 void SCN::Renderer::captureProbe(sProbe& p) {
 	FloatImage images[6]; //here we will store the six views
+	GFX::Texture temp;
+	temp.create(64, 64, GL_RGB, GL_FLOAT);
 
 	for (int i = 0; i < 6; ++i) //for every cubemap face
 	{
+		multi_probes_fbo->setTexture(&temp);
 		//compute camera orientation using defined vectors
 		vec3 eye = p.pos;
 		vec3 front = cubemapFaceNormals[i][2];
@@ -1692,7 +1697,7 @@ void SCN::Renderer::captureProbe(sProbe& p) {
 		probeCam->enable();
 		//render the scene from this point of view
 		multi_probes_fbo->bind();
-		renderProbeFaces(scene, probeCam, false);
+		renderProbeFaces(scene, probeCam, true);
 		multi_probes_fbo->unbind();
 
 		//read the pixels back and store in a FloatImage
@@ -1800,8 +1805,11 @@ void Renderer::showUI()
 			ImGui::EndCombo();
 		}
 		ImGui::Combo("Display channel", (int*)&deferred_display, "DEFAULT\0COLOR\0NORMALS\0MATERIAL_PROPERTIES\0DEPTH\0EMISSIVE\0SSAO_result\0IRRADIANCE\0VOLUMETRIC\0");
-		ImGui::Combo("Occlusion mode", (int*)&occlusion_mode, "TEXTURE\0SSAO\0SSAOplus\0");
-		ImGui::DragFloat("SSAO radius", &ssao_radius, 0.01f, 0.0f, 20.0f);
+		if (ImGui::BeginCombo("Occlusion", "Show options")) {
+			ImGui::Combo("Occlusion mode", (int*)&occlusion_mode, "TEXTURE\0SSAO\0SSAOplus\0");
+			ImGui::DragFloat("SSAO radius", &ssao_radius, 0.01f, 0.0f, 20.0f);
+			ImGui::EndCombo();
+		}
 		if (ImGui::BeginCombo("Irradiance", "Show options")) {
 			ImGui::Checkbox("Use irradience", &use_irradiance);
 			if (ImGui::Button("Capture Irradiance")) {
@@ -1832,9 +1840,73 @@ void Renderer::showUI()
 			ImGui::Checkbox("Show reflection probes", &show_ref_probes);
 			ImGui::EndCombo();
 		}
-		ImGui::Checkbox("Volumetric lights", &volumetric_light);
-		ImGui::DragFloat("Air density", &air_density, 0.001f, 0.0f, 10.0f);
-		ImGui::Checkbox("Blurring for volumetric render", &blur_volumetric);
+		if (ImGui::BeginCombo("Volumetric", "Show options")) {
+			ImGui::Checkbox("Volumetric lights", &volumetric_light);
+			ImGui::DragFloat("Air density", &air_density, 0.001f, 0.0f, 10.0f);
+			ImGui::Checkbox("Blurring for volumetric render", &blur_volumetric);
+			ImGui::EndCombo();
+		}
+	}
+	if (ImGui::BeginCombo("PostFX", "Show options")) {
+		ImGui::Checkbox("Color banding", &color_banding);
+		if (ImGui::BeginCombo("Chromatic Aberration", "Show options")) {
+			ImGui::Checkbox("Chromatic aberration", &use_chromatic_aberration);
+			ImGui::DragFloat("CA intensity", &chromatic_aberration_factor, 0.01f, 0.0f, 1.0f);
+			ImGui::EndCombo();
+		}
+		if (ImGui::BeginCombo("Depth of Field", "Show options")) {
+			ImGui::Checkbox("Depth of Field", &use_dof);
+			ImGui::DragFloat("DoF - min distance", &dof_min, 1.0f, 0.0f, dof_max - 1.0);
+			ImGui::DragFloat("DoF - max distance", &dof_max, 1.0f, dof_min, 5000.00f);
+			ImGui::EndCombo();
+		}
+		if (ImGui::BeginCombo("Blur", "Show options")) {
+			ImGui::Checkbox("Blur render", &blur_render);
+			ImGui::DragFloat("Blur (X)", &fx_blur_res.x, 1.00f, 1.0f, 100.0f);
+			ImGui::DragFloat("Blur (Y)", &fx_blur_res.y, 1.00f, 1.0f, 100.0f);
+			ImGui::DragFloat("Blur dist (X)", &fx_blur_dist.x, 1.00f, 1.0f, 10.0f);
+			ImGui::DragFloat("Blur dist (Y)", &fx_blur_dist.y, 1.00f, 1.0f, 10.0f);
+			ImGui::EndCombo();
+		}
+		if (ImGui::BeginCombo("Frame smoothing", "Show options")) {
+			ImGui::Checkbox("Frame smoothing", &use_motion_blur);
+			ImGui::Checkbox("Frame smoothing burn-in", &frame_smoothing_burnin);
+			ImGui::DragFloat("Frame smoothing intensity", &motion_blur_intensity, 0.01f, 0.01f, 0.99f);
+			ImGui::EndCombo();
+		}
+		if (ImGui::BeginCombo("Bloom", "Show options")) {
+			ImGui::Checkbox("Activate bloom", &use_bloom);
+			ImGui::DragFloat("Bloom threshold", &bloom_threshold, 0.01f, 0.01f, 2.0f);
+			ImGui::DragInt("Bloom iterations", &bloom_iterations, 1, 1, 10);
+			ImGui::EndCombo();
+		}
+		if (ImGui::BeginCombo("Grain", "Show options")) {
+			ImGui::Checkbox("Grain filter", &use_grain);
+			ImGui::DragFloat("Grain intensity", &grain_intensity, 0.001f, 0.00f, 1.0f);
+			ImGui::DragFloat("Grain size", &grain_size, 0.1f, 0.00f, 10.0f);
+			ImGui::EndCombo();
+		}
+		if (ImGui::BeginCombo("Lens Distortion", "Show options")) {
+			ImGui::Checkbox("Lens distortion", &use_lens_distortion);
+			if (ImGui::BeginCombo("select mode", "Lens distortion")) {
+				if (ImGui::Button("Pincushion")) {
+					lens_distortion_mode = 0;
+				}
+				else if (ImGui::Button("Barrel")) {
+					lens_distortion_mode = 1;
+				}
+				else if (ImGui::Button("Fisheye")) {
+					lens_distortion_mode = 2;
+				}
+				else if (ImGui::Button("CRT")) {
+					lens_distortion_mode = 3;
+				}
+				ImGui::EndCombo();
+			}
+			ImGui::DragFloat("LD intensity", &lens_distortion_intensity, 0.01f, 0.0f, 1.0f);
+			ImGui::EndCombo();
+		}
+		ImGui::EndCombo();
 	}
 	ImGui::Checkbox("Use tonemapper", &gui_use_tonemapper);
 	if (gui_use_tonemapper) {
@@ -1845,42 +1917,6 @@ void Renderer::showUI()
 			ImGui::EndCombo();
 		}
 	}
-	ImGui::Checkbox("Color banding", &color_banding);
-	ImGui::Checkbox("Chromatic aberration", &use_chromatic_aberration);
-	ImGui::DragFloat("CA intensity", &chromatic_aberration_factor, 0.01f, 0.0f, 1.0f);
-	ImGui::Checkbox("Depth of Field", &use_dof);
-	ImGui::DragFloat("DoF - min distance", &dof_min, 1.0f, 0.0f, dof_max-1.0);
-	ImGui::DragFloat("DoF - max distance", &dof_max, 1.0f, dof_min, 5000.00f);
-	ImGui::Checkbox("Blur render", &blur_render);
-	ImGui::DragFloat("Blur (X)", &fx_blur_res.x, 1.00f, 1.0f, 100.0f);
-	ImGui::DragFloat("Blur (Y)", &fx_blur_res.y, 1.00f, 1.0f, 100.0f);
-	ImGui::DragFloat("Blur dist (X)", &fx_blur_dist.x, 1.00f, 1.0f, 10.0f);
-	ImGui::DragFloat("Blur dist (Y)", &fx_blur_dist.y, 1.00f, 1.0f, 10.0f);
-	ImGui::Checkbox("Frame smoothing", &use_motion_blur);
-	ImGui::Checkbox("Frame smoothing burn-in", &frame_smoothing_burnin);
-	ImGui::DragFloat("Motion Blur Intensity", &motion_blur_intensity, 0.01f, 0.01f, 0.99f);
-	ImGui::Checkbox("Activate bloom", &use_bloom);
-	ImGui::DragFloat("Bloom threshold", &bloom_threshold, 0.01f, 0.01f, 2.0f);
-	ImGui::DragInt("Bloom iterations", &bloom_iterations, 1, 1, 10);
-	ImGui::Checkbox("Grain filter", &use_grain);
-	ImGui::DragFloat("Grain intensity", &grain_intensity, 0.01f, 0.00f, 1.0f);
-	ImGui::Checkbox("Lens distortion", &use_lens_distortion);
-	if (ImGui::BeginCombo("select mode", "Lens distortion")) {
-		if (ImGui::Button("Pincushion")) {
-			lens_distortion_mode = 0;
-		}
-		else if (ImGui::Button("Barrel")) {
-			lens_distortion_mode = 1;
-		}
-		else if (ImGui::Button("Fisheye")) {
-			lens_distortion_mode = 2;
-		}
-		else if (ImGui::Button("CRT")) {
-			lens_distortion_mode = 3;
-		}
-		ImGui::EndCombo();
-	}
-	ImGui::DragFloat("LD intensity", &lens_distortion_intensity, 0.01f, 0.0f, 2.0f);
 }
 
 #else

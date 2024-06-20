@@ -2322,8 +2322,9 @@ in vec2 v_uv;
 
 uniform sampler2D u_render;
 uniform float u_intensity;
+uniform float u_grain_size;
 uniform vec2 u_invRes;
-uniform float u_time;
+uniform vec3 u_rand_seed;
 
 out vec4 FragColor;
 
@@ -2357,13 +2358,12 @@ void main() {
 
 	vec3 color = texture2D( u_render, uv).xyz;
 
-	//float grain_density = max(0.0, noise(color * vec3(0.03, 0.04, 0.02) + uv.x + uv.y) * u_intensity);
+	float size_factor = u_grain_size * 100.0;
 
 	float grain_density = max(0.0, 
-					noise( vec3( uv.x * 5, uv.y * 5, 0.3*floor(uv.x*100) + 0.7 * floor(uv.y*100)) * vec3(u_time) )
+					noise( vec3( u_rand_seed.x + uv.x * size_factor, u_rand_seed.y + uv.y * size_factor, u_rand_seed.z))
 					);
 
-	//(u_time - (0.3 * floor(u_time/0.3)))
 	vec3 final_color = color + grain_density * u_intensity;
 
 	FragColor = vec4(final_color, 1.0);
